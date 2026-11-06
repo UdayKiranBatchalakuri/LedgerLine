@@ -207,51 +207,47 @@ See [THREATS.md](THREATS.md) for security verification evidence.
 
 ## 8. Project Structure
 
-```text
 LedgerLine/
-Ã¢â€â€š
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ server/
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ config/
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ db.js
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ models/
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ User.js
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ controllers/
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ authController.js
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ routes/
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ authRoutes.js
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ middleware/
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ authMiddleware.js
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ services/
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ utils/
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ validators.js
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ tests/
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ auth.test.js
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ health.test.js
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ docs/
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ server.js
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ package.json
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ package-lock.json
-Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ .env.example
-Ã¢â€â€š
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ client/
-Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ src/
-Ã¢â€â€š       Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ components/
-Ã¢â€â€š       Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ pages/
-Ã¢â€â€š       Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ layouts/
-Ã¢â€â€š       Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ context/
-Ã¢â€â€š       Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ services/
-Ã¢â€â€š       Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ hooks/
-Ã¢â€â€š       Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ utils/
-Ã¢â€â€š       Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ App.jsx
-Ã¢â€â€š       Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ main.jsx
-Ã¢â€â€š
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ .gitignore
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ README.md
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ PROMPTS.md
-Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ THREATS.md
-```
-
-The structure will expand as additional modules are implemented.
+|
+|-- server/
+|   |-- config/
+|   |   |-- db.js
+|   |-- models/
+|   |   |-- User.js
+|   |-- controllers/
+|   |   |-- authController.js
+|   |-- routes/
+|   |   |-- authRoutes.js
+|   |-- middleware/
+|   |   |-- authMiddleware.js
+|   |-- services/
+|   |-- utils/
+|   |   |-- validators.js
+|   |-- tests/
+|   |   |-- auth.test.js
+|   |   |-- health.test.js
+|   |-- docs/
+|   |-- server.js
+|   |-- package.json
+|   |-- package-lock.json
+|   |-- .env.example
+|
+|-- client/
+|   |-- src/
+|       |-- components/
+|       |-- pages/
+|       |-- layouts/
+|       |-- context/
+|       |-- services/
+|       |-- hooks/
+|       |-- utils/
+|       |-- App.jsx
+|       |-- main.jsx
+|
+|-- .gitignore
+|-- README.md
+|-- PROMPTS.md
+|-- THREATS.md
 
 ---
 
@@ -434,8 +430,7 @@ Development practices:
 
 The goal of LedgerLine is to demonstrate secure backend engineering, financial data integrity, reliable API design, database transaction management, automated testing, and maintainable full-stack development.
 
-**LedgerLine Ã¢â‚¬â€ Money movement with a ledger you can prove.**
-
+**LedgerLine - Money movement with a ledger you can prove.**
 ---
 
 **Project:** Snovasys Fresher Hiring Challenge 2026
