@@ -2,3 +2,18 @@ node_modules/
 .env
 .env.*
 !.env.example
+
+dist/
+coverage/
+*.log
+.DS_Store
+# Postman local workspace configuration
+.postman/
+
+# Local Postman globals
+postman/globals/
+
+# Never commit local secrets
+.env
+.env.*
+!.env.example

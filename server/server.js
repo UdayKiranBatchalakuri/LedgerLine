@@ -4,6 +4,10 @@ const cors = require("cors");
 const helmet = require("helmet");
 require("dotenv").config();
 
+const authRoutes = require("./routes/authRoutes");
+const connectDB = require("./config/db");
+
+
 const app = express();
 
 // Security headers
@@ -18,6 +22,8 @@ app.use(
 
 // Parse JSON requests
 app.use(express.json({ limit: "20kb" }));
+app.use("/api/auth", authRoutes);
+
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
@@ -33,9 +39,21 @@ module.exports = app;
 
 // Start server only when executed directly
 if (require.main === module) {
-  const PORT = process.env.PORT || 5000;
+  const startServer = async () => {
+    try {
+      // Connect to MongoDB before accepting requests
+      await connectDB();
 
-  app.listen(PORT, () => {
-    console.log(`LedgerLine API running on port ${PORT}`);
-  });
+      const PORT = process.env.PORT || 5000;
+
+      app.listen(PORT, () => {
+        console.log(`LedgerLine API running on port ${PORT}`);
+      });
+    } catch (error) {
+      console.error("Server startup failed:", error.message);
+      process.exit(1);
+    }
+  };
+
+  startServer();
 }
