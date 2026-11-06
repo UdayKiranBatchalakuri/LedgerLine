@@ -207,6 +207,7 @@ See [THREATS.md](THREATS.md) for security verification evidence.
 
 ## 8. Project Structure
 
+```text
 LedgerLine/
 |
 |-- server/
@@ -248,6 +249,9 @@ LedgerLine/
 |-- README.md
 |-- PROMPTS.md
 |-- THREATS.md
+```
+
+The structure will expand as additional modules are implemented.
 
 ---
 
