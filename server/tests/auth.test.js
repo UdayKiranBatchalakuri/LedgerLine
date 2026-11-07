@@ -14,9 +14,13 @@ test("LedgerLine authentication API tests", async (t) => {
   let token;
 
   // Connect to the test database
-  assert.ok(process.env.MONGODB_URI, "MONGODB_URI is missing");
+ // Connect to the isolated test database
+assert.ok(
+  process.env.MONGODB_TEST_URI,
+  "MONGODB_TEST_URI is missing"
+);
 
-  await mongoose.connect(process.env.MONGODB_URI);
+await mongoose.connect(process.env.MONGODB_TEST_URI);
 
   try {
     // TEST 1: Invalid registration data

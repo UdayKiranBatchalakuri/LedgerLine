@@ -124,3 +124,59 @@ Verified:
 - Implementation and testing claims reflect actual results.
 - Git commits represent meaningful development work.
 - Secrets and `.env` files must never be committed.
+
+---
+
+## Assignment 3 — Account Management
+
+**Status:** Implementation and automated tests completed.
+
+### Implementation
+- Created Account Mongoose model.
+- Implemented savings and current account creation.
+- Added unique account number generation.
+- Implemented account listing.
+- Restricted account-holder access to owned accounts.
+- Enabled ADMIN and AUDITOR account visibility.
+- Prevented clients from supplying account ownership and initial balance.
+
+### Testing
+- Account model validation tests.
+- Account creation API tests.
+- Account ownership isolation tests.
+- ADMIN and AUDITOR access tests.
+- Authentication tests.
+
+**Verification:** Full regression suite reported 40 passing tests and zero failures after subsequent deposit implementation.
+
+## Assignment 4 — Deposit Management
+
+**Status:** Implementation and automated tests completed.
+
+### Implementation
+- Created Transaction Mongoose model.
+- Implemented authenticated deposit endpoint.
+- Used integer paise for monetary amounts.
+- Validated positive safe-integer deposit amounts.
+- Restricted deposits to authenticated account holders.
+- Checked account ownership and ACTIVE status.
+- Implemented atomic account balance and ledger updates using MongoDB transactions.
+- Added transaction references and balance snapshots.
+
+### Testing
+- Successful deposit and ledger creation.
+- Invalid amount validation.
+- Authentication and authorization.
+- Account ownership restrictions.
+- Frozen and missing account handling.
+- Ledger-write failure rollback.
+- Eight simultaneous deposit requests.
+- Verified final balance and ledger consistency.
+
+**Verification:** Latest complete test run reported 40 passing tests and zero failures.
+
+### AI Assistance and Development Integrity
+- Used AI assistance for implementation guidance, debugging, code review and test development.
+- Tested changes using the Node.js test runner and Supertest.
+- No test result or implementation claim should be recorded without actual verification.
+- Git commits must represent reviewed and meaningful changes.

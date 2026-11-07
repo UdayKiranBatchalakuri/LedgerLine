@@ -104,3 +104,48 @@ A broad temporary IPv4 allowlist rule (`0.0.0.0/0`) was used during troubleshoot
 ## 6. Security Documentation Integrity
 
 Only security controls implemented and verified in the current application are described as implemented in this document.
+
+---
+
+## 7. Account Management Threats
+
+| Threat | Mitigation |
+|---|---|
+| Unauthorized account access | Account-holder queries are scoped to authenticated owner |
+| Privilege escalation | Role comes from authenticated database user |
+| Client-supplied ownership | Owner is assigned by the backend |
+| Client-supplied balance | Initial balance is controlled by the backend |
+| Duplicate account numbers | Unique account number constraint and retry logic |
+
+## 8. Deposit Management Threats
+
+| Threat | Mitigation |
+|---|---|
+| Invalid deposit amount | Positive safe-integer validation in paise |
+| Unauthorized deposit | JWT authentication and role validation |
+| Depositing into another user's account | Owner condition in account update |
+| Depositing into frozen account | ACTIVE status condition |
+| Balance and ledger inconsistency | MongoDB transaction |
+| Ledger insertion failure | Transaction rollback test |
+| Lost updates from concurrent deposits | Atomic balance increment and concurrent deposit test |
+| Unsafe balance overflow | Safe-integer upper-bound condition |
+
+### Remaining Security Risks
+
+- Mongoose immutable fields alone do not provide database-level append-only protection.
+- Persistent idempotency has not yet been implemented.
+- Withdrawal and transfer integrity remain unimplemented.
+- Concurrent withdrawal and transfer behavior remains unverified.
+- Database-level access controls and audit protections require further review.
+- Atlas credentials must remain outside Git and exposed credentials must be rotated.
+
+### Verification Evidence
+
+The deposit tests include:
+- Successful deposit and ledger creation.
+- Authorization and ownership checks.
+- Frozen-account rejection.
+- Atomic rollback simulation.
+- Eight concurrent deposits with balance and ledger verification.
+
+The latest complete regression run reported 40 passing tests and zero failures.

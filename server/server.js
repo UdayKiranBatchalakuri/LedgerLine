@@ -2,11 +2,14 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+
 require("dotenv").config();
 
+const accountRoutes = require("./routes/accountRoutes");
 const authRoutes = require("./routes/authRoutes");
-const connectDB = require("./config/db");
+const transactionRoutes = require("./routes/transactionRoutes");
 
+const connectDB = require("./config/db");
 
 const app = express();
 
@@ -22,8 +25,11 @@ app.use(
 
 // Parse JSON requests
 app.use(express.json({ limit: "20kb" }));
-app.use("/api/auth", authRoutes);
 
+// API routes
+app.use("/api/auth", authRoutes);
+app.use("/api/accounts", accountRoutes);
+app.use("/api/transactions", transactionRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
@@ -41,7 +47,6 @@ module.exports = app;
 if (require.main === module) {
   const startServer = async () => {
     try {
-      // Connect to MongoDB before accepting requests
       await connectDB();
 
       const PORT = process.env.PORT || 5000;
