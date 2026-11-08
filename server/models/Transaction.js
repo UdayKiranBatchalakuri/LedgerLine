@@ -55,6 +55,18 @@ const transactionSchema = new mongoose.Schema(
       immutable: true
     },
 
+    transferId: {
+      type: String,
+      immutable: true,
+      index: true
+    },
+
+    transferDirection: {
+      type: String,
+      enum: ["OUTGOING", "INCOMING"],
+      immutable: true
+    },
+
     description: {
       type: String,
       trim: true,

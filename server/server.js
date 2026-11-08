@@ -8,6 +8,8 @@ require("dotenv").config();
 const accountRoutes = require("./routes/accountRoutes");
 const authRoutes = require("./routes/authRoutes");
 const transactionRoutes = require("./routes/transactionRoutes");
+const adminRoutes = require("./routes/adminRoutes");
+const auditRoutes = require("./routes/auditRoutes");
 
 const connectDB = require("./config/db");
 
@@ -30,6 +32,8 @@ app.use(express.json({ limit: "20kb" }));
 app.use("/api/auth", authRoutes);
 app.use("/api/accounts", accountRoutes);
 app.use("/api/transactions", transactionRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/audit-logs", auditRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
