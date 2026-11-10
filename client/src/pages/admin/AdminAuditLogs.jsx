@@ -12,7 +12,7 @@ import {
   Clock,
   X,
 } from "lucide-react";
-import AdminNavbar from "../../components/AdminNavbar";
+import VaultLayout from "../../layouts/VaultLayout";
 import {
   getAuditLogs,
   getAuditLogById,
@@ -153,11 +153,8 @@ function AdminAuditLogs() {
   });
 
   return (
-    <div className="admin-page-wrapper">
-      <AdminNavbar />
-
-      <main className="admin-main">
-        <div className="admin-container">
+    <VaultLayout breadcrumb={[{ label: "Administration", href: "/admin" }, { label: "Audit Trail" }]}>
+      <div className="admin-container">
           {/* Header */}
           <div className="admin-page-header">
             <div>
@@ -390,7 +387,6 @@ function AdminAuditLogs() {
             )}
           </div>
         </div>
-      </main>
 
       {/* Audit Log Detail Modal */}
       {(selectedLog || modalLoading) && (
@@ -500,7 +496,7 @@ function AdminAuditLogs() {
           </div>
         </div>
       )}
-    </div>
+    </VaultLayout>
   );
 }
 

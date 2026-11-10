@@ -481,55 +481,50 @@ Authorization: Bearer YOUR_JWT_TOKEN
 
 ### 10.1 Health Check
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/health` | Check backend status |
+| Method | Endpoint | Description | Allowed Callers | Effect on the Money |
+|---|---|---|---|---|
+| GET | `/api/health` | Check backend availability and liveness | Public (Unauthenticated) | **Zero effect.** Read-only status verification. |
 
 ### 10.2 Authentication
 
-| Method | Endpoint | Description | Authentication |
-|---|---|---|---|
-| POST | `/api/auth/register` | Register user | No |
-| POST | `/api/auth/login` | Login user | No |
-| GET | `/api/auth/me` | Get authenticated user | Yes |
+| Method | Endpoint | Description | Allowed Callers | Effect on the Money |
+|---|---|---|---|---|
+| POST | `/api/auth/register` | Register an identity | Public (Unauthenticated) | **Zero effect.** Creates identity record with `status: ACTIVE` and default `role: ACCOUNT_HOLDER`. |
+| POST | `/api/auth/login` | Login with email and password | Public (Unauthenticated) | **Zero effect.** Validates bcrypt hash and issues signed 24h JWT. |
+| GET | `/api/auth/me` | Fetch active authenticated profile | Any authenticated user | **Zero effect.** Returns user details from trusted JWT claims. |
 
-### 10.3 Transactions
+### 10.3 Account Management
 
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/transactions/deposit` | Deposit money |
-| POST | `/api/transactions/withdraw` | Withdraw money |
-| POST | `/api/transactions/transfer` | Transfer funds |
-| GET | `/api/transactions/account/:accountId` | Get account transactions |
-| GET | `/api/transactions/:transactionId` | Get transaction details |
+| Method | Endpoint | Description | Allowed Callers | Effect on the Money |
+|---|---|---|---|---|
+| POST | `/api/accounts` | Open a new Savings/Current account | `ACCOUNT_HOLDER` | **Zero effect on system reserves.** Initializes a new account with `balancePaise: 0`. Client cannot supply initial balance. |
+| GET | `/api/accounts` | Retrieve bank accounts | `ACCOUNT_HOLDER` (own accounts), `ADMIN`/`AUDITOR` (all platform accounts) | **Zero effect.** Read-only inspection of balances, account types, and lifecycle states. |
 
-### 10.4 Administration
+### 10.4 Transactions & Money Movement
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/admin/users` | List users |
-| PATCH | `/api/admin/users/:userId/status` | Update user status |
-| PATCH | `/api/admin/users/:userId/role` | Update user role |
-| PATCH | `/api/admin/accounts/:accountId/status` | Update account status |
+| Method | Endpoint | Description | Allowed Callers | Effect on the Money (Conservation Invariant) |
+|---|---|---|---|---|
+| POST | `/api/transactions/deposit` | External capital injection | `ACCOUNT_HOLDER` (account owner only) | **Inflow**: Atomically increases account balance by `+amountPaise`. Increases total system reserves by exact deposit amount. Recorded in append-only ledger. |
+| POST | `/api/transactions/withdraw` | External capital liquidation | `ACCOUNT_HOLDER` (account owner only) | **Outflow**: Verifies `balance >= amountPaise` (strictly zero-floor overdraft block). Atomically decrements account balance by `-amountPaise`. Decreases system reserves by exact withdrawal amount. |
+| POST | `/api/transactions/transfer` | Internal account-to-account transfer | `ACCOUNT_HOLDER` (source account owner only) | **Zero Net Change**: Within a single atomic ACID transaction, decrements source by `-amountPaise` and increments destination by `+amountPaise`. **$\Delta \text{System Reserves} = 0$** (money strictly conserved). |
+| GET | `/api/transactions/account/:accountId` | Per-account statement & ledger entries | Account Owner, `ADMIN`, `AUDITOR` | **Zero effect.** Read-only per-account statement displaying every debit, credit, resulting running balance (`balanceAfterPaise`), timestamp, and initiator. |
+| GET | `/api/transactions/:transactionId` | Forensic transaction detail & proof | Participant Account Owner, `ADMIN`, `AUDITOR` | **Zero effect.** Read-only verification of transaction integrity and SHA-256 digital fingerprint. |
 
-### 10.5 Audit Logs
+### 10.5 Administration
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/audit-logs` | List audit logs |
-| GET | `/api/audit-logs/:auditLogId` | Get audit log details |
+| Method | Endpoint | Description | Allowed Callers | Effect on the Money |
+|---|---|---|---|---|
+| GET | `/api/admin/users` | List platform users with status/role filters | `ADMIN`, `AUDITOR` | **Zero effect.** Read-only user directory. |
+| PATCH | `/api/admin/users/:userId/status` | Suspend or reactivate user | `ADMIN` only | **Indirect Protection**: Suspended users are immediately blocked from initiating transactions. Zero balance alteration. |
+| PATCH | `/api/admin/users/:userId/role` | Reassign user authorization role | `ADMIN` only | **Zero effect on money.** Self-demotion guard prevents admin lockout. |
+| PATCH | `/api/admin/accounts/:accountId/status` | Freeze, activate, or close account | `ADMIN` only | **Financial Safeguard**: Frozen accounts reject all deposits, withdrawals, and transfers. **Closing an account with `balancePaise > 0` is strictly rejected** to prevent stranded reserves. |
 
-### 10.6 Account Management
+### 10.6 Audit Trail
 
-| Method | Endpoint | Description | Authentication |
-|---|---|---|---|
-| POST | `/api/accounts` | Create a new account | Yes |
-| GET | `/api/accounts` | List the authenticated user's accounts | Yes |
-Account creation and retrieval routes are implemented separately.
-
-Refer to `server/routes/accountRoutes.js` for their exact paths and HTTP methods.
-
-Only verified route definitions should be treated as available API endpoints.
+| Method | Endpoint | Description | Allowed Callers | Effect on the Money |
+|---|---|---|---|---|
+| GET | `/api/audit-logs` | List administrative audit trail records | `ADMIN`, `AUDITOR` | **Zero effect.** Read-only inspection of tamper-evident administrative state modifications. |
+| GET | `/api/audit-logs/:auditLogId` | Inspect audit log state diff | `ADMIN`, `AUDITOR` | **Zero effect.** Read-only inspection of `previousValue` and `newValue` snapshots. |
 
 ---
 

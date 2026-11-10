@@ -15,7 +15,7 @@ import {
   X,
   FileCheck,
 } from "lucide-react";
-import AuditorNavbar from "../../components/AuditorNavbar";
+import VaultLayout from "../../layouts/VaultLayout";
 import { getAdminAccounts } from "../../services/adminService";
 import {
   getTransactions,
@@ -200,11 +200,8 @@ function AuditorTransactions() {
   const selectedAccountObj = accounts.find((a) => a._id === selectedAccountId);
 
   return (
-    <div className="auditor-page-wrapper">
-      <AuditorNavbar />
-
-      <main className="auditor-main">
-        <div className="auditor-container">
+    <VaultLayout breadcrumb={[{ label: "Compliance & Audit", href: "/auditor" }, { label: "Transaction Inspection" }]}>
+      <div className="auditor-container">
           {/* Header */}
           <div className="auditor-page-header">
             <div>
@@ -463,7 +460,6 @@ function AuditorTransactions() {
             )}
           </div>
         </div>
-      </main>
 
       {/* Transaction Detail Modal */}
       {(selectedTxn || modalLoading) && (
@@ -597,7 +593,7 @@ function AuditorTransactions() {
           </div>
         </div>
       )}
-    </div>
+    </VaultLayout>
   );
 }
 

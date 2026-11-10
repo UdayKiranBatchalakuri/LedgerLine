@@ -10,7 +10,7 @@ import {
   UserX,
   Lock,
 } from "lucide-react";
-import AuditorNavbar from "../../components/AuditorNavbar";
+import VaultLayout from "../../layouts/VaultLayout";
 import { getAdminUsers } from "../../services/adminService";
 
 const ROLES = ["ADMIN", "ACCOUNT_HOLDER", "AUDITOR"];
@@ -115,11 +115,8 @@ function AuditorUsers() {
   });
 
   return (
-    <div className="auditor-page-wrapper">
-      <AuditorNavbar />
-
-      <main className="auditor-main">
-        <div className="auditor-container">
+    <VaultLayout breadcrumb={[{ label: "Compliance & Audit", href: "/auditor" }, { label: "User Directory Oversight" }]}>
+      <div className="auditor-container">
           {/* Header */}
           <div className="auditor-page-header">
             <div>
@@ -328,8 +325,7 @@ function AuditorUsers() {
             )}
           </div>
         </div>
-      </main>
-    </div>
+    </VaultLayout>
   );
 }
 

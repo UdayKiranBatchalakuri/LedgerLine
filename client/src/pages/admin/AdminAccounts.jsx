@@ -11,7 +11,7 @@ import {
   CheckCircle2,
   AlertTriangle,
 } from "lucide-react";
-import AdminNavbar from "../../components/AdminNavbar";
+import VaultLayout from "../../layouts/VaultLayout";
 import ConfirmModal from "../../components/ConfirmModal";
 import {
   getAdminAccounts,
@@ -263,11 +263,8 @@ function AdminAccounts() {
   });
 
   return (
-    <div className="admin-page-wrapper">
-      <AdminNavbar />
-
-      <main className="admin-main">
-        <div className="admin-container">
+    <VaultLayout breadcrumb={[{ label: "Administration", href: "/admin" }, { label: "All Accounts" }]}>
+      <div className="admin-container">
           {/* Header */}
           <div className="admin-page-header">
             <div>
@@ -515,7 +512,6 @@ function AdminAccounts() {
             )}
           </div>
         </div>
-      </main>
 
       <ConfirmModal
         isOpen={confirmModal.isOpen}
@@ -529,7 +525,7 @@ function AdminAccounts() {
           setConfirmModal((prev) => ({ ...prev, isOpen: false }))
         }
       />
-    </div>
+    </VaultLayout>
   );
 }
 

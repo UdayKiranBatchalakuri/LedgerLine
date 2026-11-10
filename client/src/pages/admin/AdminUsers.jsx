@@ -12,7 +12,7 @@ import {
   CheckCircle2,
   Lock,
 } from "lucide-react";
-import AdminNavbar from "../../components/AdminNavbar";
+import VaultLayout from "../../layouts/VaultLayout";
 import ConfirmModal from "../../components/ConfirmModal";
 import { useAuth } from "../../context/useAuth";
 import {
@@ -251,11 +251,8 @@ function AdminUsers() {
   });
 
   return (
-    <div className="admin-page-wrapper">
-      <AdminNavbar />
-
-      <main className="admin-main">
-        <div className="admin-container">
+    <VaultLayout breadcrumb={[{ label: "Administration", href: "/admin" }, { label: "User Directory" }]}>
+      <div className="admin-container">
           {/* Header */}
           <div className="admin-page-header">
             <div>
@@ -530,7 +527,6 @@ function AdminUsers() {
             )}
           </div>
         </div>
-      </main>
 
       {/* Reusable Confirmation Modal */}
       <ConfirmModal
@@ -627,7 +623,7 @@ function AdminUsers() {
           </div>
         </div>
       )}
-    </div>
+    </VaultLayout>
   );
 }
 

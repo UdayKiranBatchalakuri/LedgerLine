@@ -12,7 +12,7 @@ import {
   TrendingUp,
   Lock,
 } from "lucide-react";
-import AuditorNavbar from "../../components/AuditorNavbar";
+import VaultLayout from "../../layouts/VaultLayout";
 import {
   getAdminAccounts,
   getAdminUsers,
@@ -131,11 +131,8 @@ function AuditorDashboard() {
   };
 
   return (
-    <div className="auditor-page-wrapper">
-      <AuditorNavbar />
-
-      <main className="auditor-main">
-        <div className="auditor-container">
+    <VaultLayout breadcrumb={[{ label: "Compliance & Audit", href: "/auditor" }, { label: "Compliance Hub" }]}>
+      <div className="auditor-container">
           {/* Header */}
           <div className="auditor-page-header">
             <div>
@@ -385,8 +382,7 @@ function AuditorDashboard() {
             </>
           )}
         </div>
-      </main>
-    </div>
+    </VaultLayout>
   );
 }
 

@@ -10,7 +10,7 @@
 }
 
 .auth-brand-panel {
-  background: #102a43;
+  background: #0d3326;
   color: white;
   padding: 48px 9%;
   display: flex;
@@ -23,9 +23,10 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  font-family: "Manrope", sans-serif;
-  font-size: 23px;
-  font-weight: 800;
+  font-family: var(--vault-sans, "Inter", sans-serif);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
 }
 
 .brand-content {
@@ -43,18 +44,19 @@
 }
 
 .auth-brand-panel .eyebrow {
-  color: #8bd6c2;
+  color: #96aca1;
 }
 
 .brand-content h1 {
-  font-family: "Manrope", sans-serif;
-  font-size: clamp(40px, 5vw, 62px);
-  line-height: 1.13;
+  font-family: var(--vault-serif, "Newsreader", serif);
+  font-size: clamp(38px, 4.8vw, 56px);
+  font-weight: 500;
+  line-height: 1.15;
   margin: 0 0 22px;
 }
 
 .brand-content p {
-  color: #c7d5e0;
+  color: #96aca1;
   line-height: 1.8;
   max-width: 400px;
 }
@@ -159,17 +161,21 @@
 
 .auth-submit-button {
   width: 100%;
-  height: 49px;
+  height: 48px;
   border: none;
   border-radius: 8px;
-  background: #167c68;
+  background: #0d3326;
   color: white;
-  font-weight: 700;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
   margin-top: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
 
 .auth-submit-button:hover {
-  background: #126653;
+  background: #154233;
 }
 
 .auth-submit-button:disabled {

@@ -1,20 +1,14 @@
-
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Wallet,
-  ArrowLeft,
-  ArrowDownLeft,
-  LoaderCircle,
-  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
-
-import { useAuth } from "../context/useAuth";
+import VaultLayout from "../layouts/VaultLayout";
 import { getAccounts } from "../services/accountService";
 import { depositMoney } from "../services/transactionService";
 
-function Deposit() {
-  const { user, logout } = useAuth();
+export default function Deposit() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -28,28 +22,18 @@ function Deposit() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Load the user's accounts
   useEffect(() => {
     let isMounted = true;
-
     const loadAccounts = async () => {
       try {
         setLoading(true);
         setError("");
-
         const response = await getAccounts();
-
-        const accountList = Array.isArray(response)
-          ? response
-          : response.accounts || [];
-
-        const activeAccounts = accountList.filter(
-          (account) => account.status === "ACTIVE"
-        );
+        const accountList = Array.isArray(response) ? response : response.accounts || [];
+        const activeAccounts = accountList.filter((account) => account.status === "ACTIVE");
 
         if (isMounted) {
           setAccounts(activeAccounts);
-
           const paramAccId = searchParams.get("account");
           if (paramAccId && activeAccounts.some((a) => a._id === paramAccId)) {
             setAccountId(paramAccId);
@@ -58,334 +42,142 @@ function Deposit() {
           }
         }
       } catch (err) {
-        if (isMounted) {
-          setError(
-            err.response?.data?.message ||
-              "Unable to load your accounts."
-          );
-        }
+        if (isMounted) setError(err.response?.data?.message || "Failed to load accounts.");
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
     };
-
     loadAccounts();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [searchParams]);
 
-  const formatCurrency = (paise) =>
-    new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      minimumFractionDigits: 2,
-    }).format((Number(paise) || 0) / 100);
-
-  const selectedAccount = accounts.find(
-    (account) => account._id === accountId
-  );
-
-  // Submit deposit
-  const handleDeposit = async (event) => {
-    event.preventDefault();
-
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setError("");
     setSuccess("");
 
-    const amountInRupees = Number(amount);
-
-    if (!accountId) {
-      setError("Please select an account.");
+    const parsedRupees = parseFloat(amount);
+    if (!parsedRupees || parsedRupees <= 0) {
+      setError("Please enter a valid positive deposit amount.");
       return;
     }
 
-    if (
-      !Number.isFinite(amountInRupees) ||
-      amountInRupees <= 0
-    ) {
-      setError("Please enter a valid deposit amount.");
-      return;
-    }
-
-    if (
-      !/^\d+(\.\d{1,2})?$/.test(amount.trim())
-    ) {
-      setError("Amount can have a maximum of 2 decimal places.");
-      return;
-    }
-
-    const amountPaise = Math.round(amountInRupees * 100);
-
-    if (
-      !Number.isSafeInteger(amountPaise) ||
-      amountPaise <= 0
-    ) {
-      setError("Please enter a valid deposit amount.");
-      return;
-    }
+    const amountPaise = Math.round(parsedRupees * 100);
+    const idempotencyKey = "dep_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
 
     try {
       setSubmitting(true);
-
-      const idempotencyKey = crypto.randomUUID();
-
       await depositMoney({
         accountId,
         amountPaise,
-        description: description.trim(),
+        description: description || "Vault Deposit",
         idempotencyKey,
       });
 
-      setSuccess(
-        `Deposit of ${formatCurrency(amountPaise)} completed successfully.`
-      );
-
-      setAmount("");
-      setDescription("");
-
-      // Refresh account balances
-      const response = await getAccounts();
-
-      const accountList = Array.isArray(response)
-        ? response
-        : response.accounts || [];
-
-      const activeAccounts = accountList.filter(
-        (account) => account.status === "ACTIVE"
-      );
-
-      setAccounts(activeAccounts);
+      setSuccess(`Successfully deposited ₹${parsedRupees.toFixed(2)}.`);
+      setTimeout(() => navigate("/dashboard"), 1400);
     } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          "Deposit failed. Please try again."
-      );
+      setError(err.response?.data?.message || err.message || "Deposit transaction failed.");
     } finally {
       setSubmitting(false);
     }
   };
 
+  const selectedAccount = accounts.find((a) => a._id === accountId);
+
   return (
-    <main className="dashboard-page">
-      <header className="dashboard-header">
-        <Link
-          to="/dashboard"
-          className="brand-logo dashboard-logo"
-          style={{ textDecoration: "none" }}
-        >
-          <Wallet size={27} />
-          <span>LedgerLine</span>
-        </Link>
+    <VaultLayout breadcrumb={[{ label: "Workspace", href: "/dashboard" }, { label: "Deposit" }]}>
+      <div className="vault-view-header">
+        <div className="vault-view-kicker">FINANCIAL MOVEMENT</div>
+        <h1 className="vault-view-title">Deposit funds</h1>
+        <p className="vault-view-subtitle">Credit funds securely into an active account ledger.</p>
+      </div>
 
-        <div className="dashboard-user">
-          <div className="user-details">
-            <strong>{user?.name}</strong>
-            <span>{user?.role?.replaceAll("_", " ")}</span>
+      <div className="vault-form-box" style={{ maxWidth: "600px" }}>
+        {error && (
+          <div style={{ background: "var(--vault-danger-bg)", color: "var(--vault-danger)", border: "1px solid var(--vault-danger-border)", padding: "12px 16px", borderRadius: "8px", fontSize: "13px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <AlertCircle size={16} />
+            <span>{error}</span>
           </div>
+        )}
 
-          <button
-            className="logout-button"
-            type="button"
-            onClick={() => {
-              logout();
-              navigate("/login");
-            }}
-          >
-            Logout
-          </button>
-        </div>
-      </header>
-
-      <section className="dashboard-content">
-        <Link
-          to="/dashboard"
-          className="dashboard-action-button"
-          style={{
-            display: "inline-flex",
-            textDecoration: "none",
-            marginBottom: "24px",
-          }}
-        >
-          <ArrowLeft size={17} />
-          Back to Dashboard
-        </Link>
-
-        <div className="dashboard-welcome">
-          <div>
-            <span className="eyebrow">MONEY MANAGEMENT</span>
-            <h1>Deposit Money</h1>
-            <p>Add money to your LedgerLine account.</p>
+        {success && (
+          <div style={{ background: "var(--vault-success-bg)", color: "var(--vault-success)", border: "1px solid var(--vault-success-border)", padding: "12px 16px", borderRadius: "8px", fontSize: "13px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <CheckCircle2 size={16} />
+            <span>{success}</span>
           </div>
+        )}
 
-          <div className="secure-indicator">
-            <ShieldCheck size={19} />
-            Secure transaction
+        {loading ? (
+          <div style={{ padding: "30px", textAlign: "center", color: "var(--vault-text-muted)" }}>
+            Loading accounts...
           </div>
-        </div>
-
-        <div
-          className="dashboard-card"
-          style={{
-            maxWidth: "650px",
-            margin: "30px auto",
-            padding: "30px",
-          }}
-        >
-          <div className="card-icon">
-            <ArrowDownLeft size={25} />
+        ) : accounts.length === 0 ? (
+          <div className="vault-empty-card" style={{ padding: "30px 16px" }}>
+            <h4 className="vault-empty-title">No Active Accounts</h4>
+            <p className="vault-empty-desc">You need at least one active account to make a deposit.</p>
+            <Link to="/account-request" className="vault-btn-primary">
+              Request an account
+            </Link>
           </div>
-
-          <h2>Deposit Details</h2>
-
-          {error && (
-            <div className="error-message" role="alert">
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div
-              className="success-message"
-              role="status"
-              style={{ marginBottom: "20px" }}
-            >
-              {success}
-            </div>
-          )}
-
-          {loading ? (
-            <p>Loading your accounts...</p>
-          ) : accounts.length === 0 ? (
-            <p>
-              No active accounts found. Please contact the
-              administrator.
-            </p>
-          ) : (
-            <form onSubmit={handleDeposit}>
-              <div style={{ marginBottom: "20px" }}>
-                <label htmlFor="accountId">
-                  Select Account
-                </label>
-
-                <select
-                  id="accountId"
-                  value={accountId}
-                  onChange={(event) =>
-                    setAccountId(event.target.value)
-                  }
-                  required
-                  disabled={submitting}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "12px",
-                    marginTop: "8px",
-                  }}
-                >
-                  {accounts.map((account) => (
-                    <option
-                      key={account._id}
-                      value={account._id}
-                    >
-                      {account.accountType} - {account.accountNumber}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <div className="vault-form-field">
+              <label className="vault-label">Destination Account</label>
+              <select
+                className="vault-select"
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+              >
+                {accounts.map((acc) => (
+                  <option key={acc._id} value={acc._id}>
+                    {acc.accountType || acc.type} Account (₹{((acc.balancePaise || 0) / 100).toFixed(2)}) — ...{acc.accountNumber ? acc.accountNumber.slice(-6) : acc._id.slice(-6)}
+                  </option>
+                ))}
+              </select>
               {selectedAccount && (
-                <div style={{ marginBottom: "20px" }}>
-                  <p>
-                    Current balance:{" "}
-                    <strong>
-                      {formatCurrency(selectedAccount.balancePaise)}
-                    </strong>
-                  </p>
+                <div style={{ fontSize: "11.5px", color: "var(--vault-text-muted)", marginTop: "4px" }}>
+                  Current balance: ₹{((selectedAccount.balancePaise || 0) / 100).toFixed(2)}
                 </div>
               )}
+            </div>
 
-              <div style={{ marginBottom: "20px" }}>
-                <label htmlFor="amount">
-                  Deposit Amount (₹)
-                </label>
+            <div className="vault-form-field">
+              <label className="vault-label">Amount (₹)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="0.00"
+                className="vault-input"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                required
+              />
+            </div>
 
-                <input
-                  id="amount"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  placeholder="Enter amount"
-                  value={amount}
-                  onChange={(event) =>
-                    setAmount(event.target.value)
-                  }
-                  required
-                  disabled={submitting}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "12px",
-                    marginTop: "8px",
-                  }}
-                />
-              </div>
+            <div className="vault-form-field" style={{ marginBottom: "26px" }}>
+              <label className="vault-label">Description (Optional)</label>
+              <input
+                type="text"
+                placeholder="e.g. Consulting payout, initial funding"
+                className="vault-input"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
 
-              <div style={{ marginBottom: "24px" }}>
-                <label htmlFor="description">
-                  Description (Optional)
-                </label>
-
-                <input
-                  id="description"
-                  type="text"
-                  maxLength={200}
-                  placeholder="Enter deposit description"
-                  value={description}
-                  onChange={(event) =>
-                    setDescription(event.target.value)
-                  }
-                  disabled={submitting}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "12px",
-                    marginTop: "8px",
-                  }}
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="dashboard-action-button"
-                disabled={submitting || !accountId}
-                style={{
-                  width: "100%",
-                  justifyContent: "center",
-                  cursor: submitting ? "wait" : "pointer",
-                }}
-              >
-                {submitting ? (
-                  <>
-                    <LoaderCircle size={18} />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <ArrowDownLeft size={18} />
-                    Confirm Deposit
-                  </>
-                )}
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <Link to="/dashboard" className="vault-btn-secondary">
+                Cancel
+              </Link>
+              <button type="submit" className="vault-btn-primary" disabled={submitting}>
+                {submitting ? "Processing..." : "Complete Deposit"}
               </button>
-            </form>
-          )}
-        </div>
-      </section>
-    </main>
+            </div>
+          </form>
+        )}
+      </div>
+    </VaultLayout>
   );
 }
-
-export default Deposit;

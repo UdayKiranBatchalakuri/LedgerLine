@@ -13,7 +13,7 @@ import {
   UserX,
   Lock,
 } from "lucide-react";
-import AdminNavbar from "../../components/AdminNavbar";
+import VaultLayout from "../../layouts/VaultLayout";
 import {
   getAdminUsers,
   getAdminAccounts,
@@ -136,11 +136,8 @@ function AdminDashboard() {
   };
 
   return (
-    <div className="admin-page-wrapper">
-      <AdminNavbar />
-
-      <main className="admin-main">
-        <div className="admin-container">
+    <VaultLayout breadcrumb={[{ label: "Administration", href: "/admin" }, { label: "System Overview" }]}>
+      <div className="admin-container">
           {/* Header */}
           <div className="admin-page-header">
             <div>
@@ -379,8 +376,7 @@ function AdminDashboard() {
             </>
           )}
         </div>
-      </main>
-    </div>
+    </VaultLayout>
   );
 }
 

@@ -310,31 +310,57 @@ As required by the challenge standard, below are the specific dated instances wh
 - **What the tool was asked to do:** Implement idempotency key caching for the fund transfer endpoint to prevent double-charging on network retry timeouts.
 - **What the tool produced:** A simple key-value lookup checking if `req.headers['idempotency-key']` existed in the database and returning the cached response if present.
 - **What was specifically wrong:** Critical financial security flaw. If a client re-used an idempotency key with a *different* amount, a different source account, or a different recipient, the system would return the old cached receipt while silently failing to process the new transaction, creating a discrepancy between client state and actual ledger balances.
-- **What was done instead:** Enforced cryptographic SHA-256 request payload hashing. The server computes `crypto.createHash('sha256').update(JSON.stringify({ amountPaise, sourceAccountId, destinationAccountId })).digest('hex')` and stores both `idempotencyKey` and `idempotencyHash`. If an identical key is submitted with mismatched payload parameters, the server rejects it with `HTTP 409 Conflict`. Verified in `tests/transfer.test.js`.
+- **What was done instead:** Enforced cryptographic SHA-256 request payload hashing. The server computes `crypto.createHash('sha256').update(JSON.stringify({ amountPaise, sourceAccountId, destinationAccountId })).digest('hex')` and stores both `idempotencyKey` and `idempotencyHash`. If an identical key is submitted with mismatched payload parameters, the server rejects it with `HTTP 409 Conflict`.
+- **Commit Reference:** [`bb6d264`](https://github.com/udaykiran7422/LedgerLine/commit/bb6d264) (Verified in `server/tests/transfer.test.js`).
 
 ### 2. Money Integrity: Enforcing Strict Integer Paise vs. Floating-Point Decimals
 - **What the tool was asked to do:** Implement deposit and withdrawal amount calculation and account balance updates.
 - **What the tool produced:** Balance arithmetic using JavaScript `parseFloat(amount)` and standard rupee addition (`balance += amount`).
 - **What was specifically wrong:** In JavaScript, IEEE-754 floating-point arithmetic suffers from precision leakage (e.g., `0.1 + 0.2 === 0.30000000000000004`). In a high-volume financial ledger, fractional penny rounding errors violate the core invariant: *"The books must always balance"*.
-- **What was done instead:** Completely banned floating-point monetary math across both client and server. Converted all financial amounts to integer **Paise** (`1 INR = 100 paise`), validated inputs with `Number.isSafeInteger()`, rejected fractional paise at the Zod schema boundary, and stored strictly integer balances in MongoDB. Verified in `tests/account.test.js`.
+- **What was done instead:** Completely banned floating-point monetary math across both client and server. Converted all financial amounts to integer **Paise** (`1 INR = 100 paise`), validated inputs with `Number.isSafeInteger()`, rejected fractional paise at the Zod schema boundary, and stored strictly integer balances in MongoDB.
+- **Commit Reference:** [`ed60da6`](https://github.com/udaykiran7422/LedgerLine/commit/ed60da6) (Verified in `server/tests/account.test.js`).
 
-### 3. Frontend Lifecycle: Empty-Accounts Freeze in Transaction History
+### 3. Access Control & Authorization: Role Enforcement in Financial Endpoints
+- **What the tool was asked to do:** Wire deposit and withdrawal API endpoints to the frontend portals.
+- **What the tool produced:** Permitted any authenticated token regardless of role to initiate write operations, relying purely on ownership check `account.owner === user.id`.
+- **What was specifically wrong:** Critical privilege boundary failure. Administrators and Auditors should never have arbitrary write access to deposit or withdraw customer funds. Permitting an administrative account to execute deposits/withdrawals violates regulatory separation of duties.
+- **What was done instead:** Enforced strict server-side RBAC validation: `if (req.user.role !== "ACCOUNT_HOLDER") return res.status(403).json({ message: "Only account holders can deposit/withdraw money" })`. Administrators are restricted strictly to account lifecycle governance (freeze/activate/close), and Auditors are 100% read-only.
+- **Commit Reference:** [`ef828af`](https://github.com/udaykiran7422/LedgerLine/commit/ef828af) (Verified in `server/tests/deposit.test.js` & `server/tests/withdrawal.test.js`).
+
+### 4. Audit Trail Integrity: Preventing Positive-Balance Account Closure
+- **What the tool was asked to do:** Implement administrative account status modification (`PATCH /api/admin/accounts/:accountId/status`).
+- **What the tool produced:** Allowed setting `status: "CLOSED"` on any account as long as the caller had the `ADMIN` role.
+- **What was specifically wrong:** Severe financial violation. If an account with a positive balance (e.g. ₹5,000) is marked `CLOSED`, those customer reserves are permanently stranded and inaccessible, creating an un-reconcilable discrepancy in system reserves.
+- **What was done instead:** Implemented an invariant check in `adminController.js`: `if (newStatus === "CLOSED" && account.balancePaise > 0) return res.status(400).json({ message: "Cannot close an account with a positive balance" })`. An audit record is created only when a zero-balance account is closed.
+- **Commit Reference:** [`bb6d264`](https://github.com/udaykiran7422/LedgerLine/commit/bb6d264) (Verified in `server/tests/admin.test.js`).
+
+### 5. Frontend Lifecycle: Empty-Accounts Freeze in Transaction History
 - **What the tool was asked to do:** Implement the Account Holder Transaction History page (`client/src/pages/Transactions.jsx`).
 - **What the tool produced:** A `useEffect` hook that set `loadingTxns = true` whenever `accountId` changed, but only set `accountId` once an account was selected from the fetched account list.
 - **What was specifically wrong:** If a brand-new user with zero bank accounts logged into the system, `accounts.length` was 0, so no account was ever selected. This left `loadingTxns` stuck on `true` permanently, displaying an infinite loading spinner and blocking the user from viewing the page.
 - **What was done instead:** Added a guard in `Transactions.jsx`: if the fetched account list is empty, both `loadingAccounts` and `loadingTxns` are immediately resolved to `false`, displaying a clean empty state with an onboarding prompt to create their first bank account.
+- **Commit Reference:** [`9d2b223`](https://github.com/udaykiran7422/LedgerLine/commit/9d2b223).
 
-### 4. Code Quality: React Hook Synchronous State Updates
-- **What the tool was asked to do:** Create Admin and Auditor telemetry dashboards that fetch users, accounts, and audit logs on mount.
-- **What the tool produced:** Synchronous state modifications inside the `useEffect` body prior to async promise resolution.
-- **What was specifically wrong:** Triggered ESLint `react-hooks/set-state-in-effect` errors, potential memory leaks, and cascading re-renders when navigating away before requests completed.
-- **What was done instead:** Refactored data loading into isolated async initialization functions with an `isMounted` cancellation flag, updating state only when mounted and after promise resolution. Re-ran linter to achieve `0 errors, 0 warnings`.
+### 6. Session Security & Routing: Unhandled 401 Expiration & Hardcoded Role Redirects
+- **What the tool was asked to do:** Implement login redirection and Axios client authorization headers.
+- **What the tool produced:** A hardcoded `if (role === "ADMIN") navigate("/admin")` redirect that trapped administrative accounts on the legacy overview, alongside missing response error interceptors.
+- **What was specifically wrong:** When an administrative account logged in, they were forced into `/admin` and locked out of the primary consumer Overview (`/dashboard`). Furthermore, when a JWT expired, the app remained stuck on stale views with generic errors.
+- **What was done instead:** Modernized `App.jsx` and `Login.jsx` to route all authenticated users directly to the unified dark forest green Overview (`/dashboard`), moved admin telemetry to dedicated sidebar sub-routes (`/admin/users`, `/admin/accounts`, `/admin/audit-logs`), and added an Axios 401 interceptor that clears expired tokens and redirects to `/login`.
+- **Commit Reference:** [`9d2b223`](https://github.com/udaykiran7422/LedgerLine/commit/9d2b223).
 
-### 5. Session Security: Unhandled HTTP 401 Token Expiration
-- **What the tool was asked to do:** Configure the Axios API client for authenticated requests.
-- **What the tool produced:** A request interceptor that attached `Bearer ${token}` from `localStorage`, with no response interceptor.
-- **What was specifically wrong:** When a JWT expired after 24 hours or when an administrator suspended a user, subsequent API requests failed with HTTP 401, but the frontend remained stuck on stale views with generic network errors rather than redirecting the user to log in again.
-- **What was done instead:** Added an Axios response interceptor in `client/src/services/api.js` that checks for HTTP 401 responses on protected endpoints, automatically cleans up invalid tokens from `localStorage`, and redirects the browser cleanly to `/login`.
+---
+
+# November 10, 2026
+
+## Assignment 11 — Unified Vault Design System & Full RBAC Hardening
+
+### Completed Work
+- Replaced fragmented portal designs with the unified LedgerLine Vault design system ([`vault.css`](client/src/vault.css)) matching production fintech standards (Page 1-4 screenshots).
+- Implemented persistent dark forest green sidebar (`#0d3326`) with Workspace navigation: Overview, Accounts, Statements, and Account Request.
+- Wired live reactive modal dialogs for direct banking operations: [VaultDepositModal.jsx](client/src/components/VaultDepositModal.jsx), [VaultWithdrawModal.jsx](client/src/components/VaultWithdrawModal.jsx), [VaultTransferModal.jsx](client/src/components/VaultTransferModal.jsx), and [VaultProofModal.jsx](client/src/components/VaultProofModal.jsx).
+- Consolidated Admin and Auditor routes within [VaultLayout.jsx](client/src/layouts/VaultLayout.jsx).
+- Upgraded `README.md` API documentation with caller roles and monetary conservation effects.
+- Verified 134/134 passing backend tests and 0-error client production Vite build.
 
 ---
 

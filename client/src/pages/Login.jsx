@@ -20,14 +20,8 @@ function Login() {
     setLoading(true);
 
     try {
-      const loggedInUser = await login(email, password);
-      if (loggedInUser?.role === "ADMIN") {
-        navigate("/admin", { replace: true });
-      } else if (loggedInUser?.role === "AUDITOR") {
-        navigate("/auditor", { replace: true });
-      } else {
-        navigate("/dashboard", { replace: true });
-      }
+      await login(email, password);
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(
         err.response?.data?.message ||

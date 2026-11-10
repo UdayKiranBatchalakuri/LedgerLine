@@ -1,585 +1,445 @@
-
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-
 import {
   Wallet,
   ArrowDownLeft,
   ArrowUpRight,
-  ArrowLeftRight,
-  LogOut,
+  ArrowRightLeft,
   ShieldCheck,
-  RefreshCw,
-  PlusCircle,
-  Receipt,
   Copy,
   Check,
+  CreditCard,
+  Activity,
+  ArrowRight,
 } from "lucide-react";
-
 import { useAuth } from "../context/useAuth";
-import {
-  getAccounts,
-  createAccount,
-} from "../services/accountService";
+import VaultLayout from "../layouts/VaultLayout";
+import VaultDepositModal from "../components/VaultDepositModal";
+import VaultWithdrawModal from "../components/VaultWithdrawModal";
+import VaultTransferModal from "../components/VaultTransferModal";
+import VaultProofModal from "../components/VaultProofModal";
+import { getAccounts } from "../services/accountService";
 import { getTransactions } from "../services/transactionService";
 
-// Fetch all transaction pages for an account
-async function fetchAllTransactions(accountId) {
-  let page = 1;
-  let totalPages = 1;
-  const transactions = [];
-
-  while (page <= totalPages) {
-    const response = await getTransactions(accountId, {
-      page,
-      limit: 10,
-    });
-
-    transactions.push(...(response.transactions || []));
-
-    totalPages = response.pagination?.totalPages || 1;
-    page++;
-  }
-
-  return transactions;
-}
-
-// Get accounts and calculate their transaction summary
-async function loadDashboardData() {
-  const accountResponse = await getAccounts();
-
-  const accounts = Array.isArray(accountResponse)
-    ? accountResponse
-    : accountResponse.accounts || [];
-
-  const activeAccounts = accounts.filter(
-    (account) => account.status === "ACTIVE"
-  );
-
-  const transactionsByAccount = await Promise.all(
-    activeAccounts.map((account) =>
-      fetchAllTransactions(account._id)
-    )
-  );
-
-  const allTransactions = transactionsByAccount.flat();
-
-  const summary = allTransactions.reduce(
-    (result, transaction) => {
-      const amount = Number(transaction.amountPaise) || 0;
-
-      switch (transaction.type) {
-        case "DEPOSIT":
-          result.depositsPaise += amount;
-          break;
-
-        case "WITHDRAWAL":
-          result.withdrawalsPaise += amount;
-          break;
-
-        case "TRANSFER":
-          if (transaction.transferDirection === "OUTGOING") {
-            result.transfersPaise += amount;
-          }
-          break;
-
-        default:
-          break;
-      }
-
-      return result;
-    },
-    {
-      depositsPaise: 0,
-      withdrawalsPaise: 0,
-      transfersPaise: 0,
-    }
-  );
-
-  return { accounts, summary };
-}
-
-function Dashboard() {
-  const { user, logout } = useAuth();
-
-  const [accounts, setAccounts] = useState([]);
-  const [summary, setSummary] = useState({
-    depositsPaise: 0,
-    withdrawalsPaise: 0,
-    transfersPaise: 0,
+function formatTxDate(dateStr) {
+  if (!dateStr) return "Just now";
+  return new Date(dateStr).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
+}
 
+export default function Dashboard() {
+  const { user } = useAuth();
+  const [accounts, setAccounts] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
-  const [summaryError, setSummaryError] = useState("");
-const [showCreateAccount, setShowCreateAccount] = useState(false);
-const [accountType, setAccountType] = useState("SAVINGS");
-const [creatingAccount, setCreatingAccount] = useState(false);
-const [accountMessage, setAccountMessage] = useState("");
-const [accountError, setAccountError] = useState("");
-const [copiedId, setCopiedId] = useState(null);
-  // Initial dashboard loading
+  const [copiedId, setCopiedId] = useState(null);
+
+  const [isDepositOpen, setIsDepositOpen] = useState(false);
+  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [activeProofTxn, setActiveProofTxn] = useState(null);
+
+  const reloadData = async () => {
+    try {
+      setLoading(true);
+      const accRes = await getAccounts();
+      const accList = Array.isArray(accRes) ? accRes : accRes.accounts || [];
+      setAccounts(accList);
+
+      if (accList.length > 0) {
+        const primaryAccount = accList[0];
+        const txRes = await getTransactions(primaryAccount._id, { page: 1, limit: 5 });
+        setTransactions(txRes.transactions || []);
+      } else {
+        setTransactions([]);
+      }
+    } catch (err) {
+      console.error("Failed to reload dashboard data", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
-
-    const initializeDashboard = async () => {
+    async function init() {
       try {
-        const data = await loadDashboardData();
+        const accRes = await getAccounts();
+        const accList = Array.isArray(accRes) ? accRes : accRes.accounts || [];
+        if (!isMounted) return;
+        setAccounts(accList);
 
-        if (isMounted) {
-          setAccounts(data.accounts);
-          setSummary(data.summary);
+        if (accList.length > 0) {
+          const primaryAccount = accList[0];
+          const txRes = await getTransactions(primaryAccount._id, { page: 1, limit: 5 });
+          if (!isMounted) return;
+          setTransactions(txRes.transactions || []);
         }
       } catch (err) {
-        if (isMounted) {
-          setError(
-            err.response?.data?.message ||
-              "Unable to load dashboard data."
-          );
-        }
+        if (isMounted) console.error("Failed to load dashboard data", err);
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
-    };
-
-    initializeDashboard();
+    }
+    init();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
-  // Refresh dashboard data
-  const handleRefresh = async () => {
-    if (refreshing || loading) return;
-
-    try {
-      setRefreshing(true);
-      setError("");
-      setSummaryError("");
-
-      const data = await loadDashboardData();
-
-      setAccounts(data.accounts);
-      setSummary(data.summary);
-    } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          "Unable to refresh dashboard."
-      );
-    } finally {
-      setRefreshing(false);
-    }
-  };
-  const handleCreateAccount = async (e) => {
-  e.preventDefault();
-
-  try {
-    setCreatingAccount(true);
-    setAccountError("");
-    setAccountMessage("");
-
-    await createAccount(accountType);
-
-    const data = await loadDashboardData();
-
-    setAccounts(data.accounts);
-    setSummary(data.summary);
-
-    setAccountMessage("Bank account created successfully!");
-    setShowCreateAccount(false);
-    setAccountType("SAVINGS");
-  } catch (err) {
-    setAccountError(
-      err.response?.data?.message ||
-        "Unable to create bank account."
-    );
-  } finally {
-    setCreatingAccount(false);
-  }
-};
-
-
-  const handleCopyId = async (id) => {
-    try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(id);
-      }
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch {
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    }
+  const handleCopyId = (id) => {
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Calculate active account balance
-  const totalBalancePaise = accounts.reduce(
-    (total, account) =>
-      account.status === "ACTIVE"
-        ? total + (Number(account.balancePaise) || 0)
-        : total,
-    0
-  );
+  const totalAccounts = accounts.length;
+  const activeAccounts = accounts.filter((a) => a.status === "ACTIVE").length;
+  const totalBalancePaise = accounts.reduce((sum, a) => sum + (Number(a.balancePaise) || 0), 0);
+  const totalBalanceRupees = (totalBalancePaise / 100).toFixed(2);
 
-  // Format paise as Indian Rupees
-  const formatCurrency = (paise) =>
-    new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      minimumFractionDigits: 2,
-    }).format(paise / 100);
+  const firstName = user?.name ? user.name.split(" ")[0].toLowerCase() : "uday";
 
   return (
-    <main className="dashboard-page">
-      {/* Header */}
-      <header className="dashboard-header">
-        <div className="brand-logo dashboard-logo">
-          <Wallet size={27} />
-          <span>LedgerLine</span>
-        </div>
-
-        <div className="dashboard-user">
-          <div className="user-details">
-            <strong>{user?.name}</strong>
-            <span>{user?.role?.replaceAll("_", " ")}</span>
+    <VaultLayout breadcrumb={[{ label: "Workspace", href: "/dashboard" }, { label: "Overview" }]}>
+      {/* --------------------------------------------------------------------
+          HERO BANNER (Page 4 Screenshot)
+          -------------------------------------------------------------------- */}
+      <section className="vault-hero-card">
+        <div className="vault-hero-left">
+          <div className="vault-hero-kicker">
+            <span className="vault-pill-dot"></span>
+            <span>YOUR FINANCIAL OVERVIEW</span>
           </div>
 
-          <button
-            className="logout-button"
-            onClick={logout}
-            type="button"
-          >
-            <LogOut size={17} />
-            Logout
-          </button>
-        </div>
-      </header>
+          <h1 className="vault-hero-headline">
+            Good to see you, <em>{firstName}</em>
+          </h1>
 
-      <section className="dashboard-content">
-        {/* Welcome and Navigation */}
-        <div className="dashboard-welcome">
-          <div>
-            <span className="eyebrow">OVERVIEW</span>
-            <h1>Welcome, {user?.name}!</h1>
-            <p>Here's your LedgerLine account overview.</p>
-          </div>
+          <p className="vault-hero-subtext">
+            Everything in its place. Here's your account overview.
+          </p>
 
-          <div className="dashboard-actions">
-            <div className="secure-indicator">
-              <ShieldCheck size={19} />
-              Secure session
-            </div>
-
-            <Link
-              to="/deposit"
-              className="dashboard-action-button"
-            >
-              <PlusCircle size={18} />
-              Deposit Money
-            </Link>
-            <Link
-  to="/withdrawal"
-  className="dashboard-action-button"
->
-  <ArrowUpRight size={18} />
-  Withdraw Money
-</Link>
-<Link
-  to="/transfer"
-  className="dashboard-action-button"
->
-  <ArrowLeftRight size={18} />
-  Transfer Money
-</Link>
-
-            <Link
-              to="/transactions"
-              className="dashboard-action-button"
-            >
-              <Receipt size={18} />
-              Transaction History
-            </Link>
+          <div className="vault-hero-tags">
+            <span className="vault-hero-pill">
+              <span className="vault-pill-dot"></span>
+              <span>Account holder</span>
+            </span>
+            <span className="vault-hero-pill">Private workspace</span>
           </div>
         </div>
 
-        {/* Error Messages */}
-        {error && (
-          <div className="error-message" role="alert">
-            {error}
-          </div>
-        )}
-
-        {summaryError && (
-          <div className="error-message" role="alert">
-            {summaryError}
-          </div>
-        )}
-
-        {/* Financial Summary */}
-        <div className="dashboard-cards">
-          <div className="dashboard-card">
-            <div className="card-icon">
-              <Wallet size={23} />
+        <div className="vault-dial-widget">
+          <div className="vault-dial-outer">
+            <div className="vault-dial-inner">
+              <span className="vault-dial-letter">L</span>
             </div>
-
-            <span>Total balance</span>
-
-            <h2>
-              {loading
-                ? "Loading..."
-                : formatCurrency(totalBalancePaise)}
-            </h2>
-
-            <small>Across active accounts</small>
           </div>
+          <span className="vault-dial-pagination">01 / 02</span>
+        </div>
+      </section>
 
-          <div className="dashboard-card">
-            <div className="card-icon">
-              <ArrowDownLeft size={23} />
+      {/* --------------------------------------------------------------------
+          ACCOUNT OVERVIEW METRICS SECTION
+          -------------------------------------------------------------------- */}
+      <div className="vault-section-header">
+        <span className="vault-section-title">Account overview</span>
+        <Link to="/accounts" className="vault-section-link">
+          <span>All accounts</span>
+          <ArrowRight size={13} />
+        </Link>
+      </div>
+
+      <div className="vault-metrics-grid">
+        <div className="vault-metric-card">
+          <div className="vault-metric-top">
+            <div className="vault-metric-icon-box">
+              <CreditCard />
             </div>
-
-            <span>Total deposits</span>
-
-            <h2>
-              {loading
-                ? "Loading..."
-                : formatCurrency(summary.depositsPaise)}
-            </h2>
-
-            <small>All recorded deposits</small>
+            <span className="vault-metric-label">Total accounts</span>
           </div>
-
-          <div className="dashboard-card">
-            <div className="card-icon">
-              <ArrowUpRight size={23} />
-            </div>
-
-            <span>Total withdrawals</span>
-
-            <h2>
-              {loading
-                ? "Loading..."
-                : formatCurrency(summary.withdrawalsPaise)}
-            </h2>
-
-            <small>All recorded withdrawals</small>
+          <div className="vault-metric-value">
+            {totalAccounts < 10 ? `0${totalAccounts}` : totalAccounts}
           </div>
-
-          <div className="dashboard-card">
-            <div className="card-icon">
-              <ArrowLeftRight size={23} />
-            </div>
-
-            <span>Transfers sent</span>
-
-            <h2>
-              {loading
-                ? "Loading..."
-                : formatCurrency(summary.transfersPaise)}
-            </h2>
-
-            <small>Outgoing transfers only</small>
-          </div>
+          <span className="vault-metric-subtext">Accounts connected</span>
         </div>
 
-        {/* Accounts Section */}
-        <section className="accounts-section">
-          <div className="accounts-heading">
-            <div>
-              <h2>My accounts</h2>
-              <p>Your registered bank accounts.</p>
+        <div className="vault-metric-card">
+          <div className="vault-metric-top">
+            <div className="vault-metric-icon-box">
+              <ShieldCheck />
             </div>
-            <button
-  className="create-account-button"
-  type="button"
-  onClick={() => {
-    setAccountError("");
-    setAccountMessage("");
-    setShowCreateAccount(true);
-  }}
->
-  <PlusCircle size={18} />
-  Create Account
-</button>
+            <span className="vault-metric-label">Account status</span>
+          </div>
+          <div className="vault-metric-value" style={{ fontSize: "20px" }}>
+            {activeAccounts > 0 ? "Active" : "No accounts"}
+          </div>
+          <span className="vault-metric-subtext">{activeAccounts} active accounts</span>
+        </div>
 
-            <button
-              className="refresh-button"
-              onClick={handleRefresh}
-              disabled={refreshing || loading}
-              title="Refresh dashboard"
-              type="button"
-            >
-              <RefreshCw
-                size={17}
-                className={
-                  refreshing ? "refresh-spinning" : ""
-                }
-              />
-            </button>
+        <div className="vault-metric-card">
+          <div className="vault-metric-top">
+            <div className="vault-metric-icon-box">
+              <Wallet />
+            </div>
+            <span className="vault-metric-label">Total Balance</span>
+          </div>
+          <div className="vault-metric-value" style={{ color: "var(--vault-primary)" }}>
+            ₹{totalBalanceRupees}
+          </div>
+          <span className="vault-metric-subtext">System reserve snapshot</span>
+        </div>
+      </div>
+
+      {/* --------------------------------------------------------------------
+          TWO-COLUMN SECTION: YOUR ACCOUNTS + QUICK ACTIONS
+          -------------------------------------------------------------------- */}
+      <div className="vault-two-columns">
+        {/* Left Column: Your accounts */}
+        <div className="vault-panel">
+          <div className="vault-panel-header">
+            <div className="vault-panel-title">
+              <span>Your accounts</span>
+              <ArrowRight size={13} style={{ opacity: 0.6 }} />
+            </div>
           </div>
 
           {loading ? (
-            <p>Loading accounts...</p>
+            <div style={{ padding: "30px", textAlign: "center", color: "var(--vault-text-muted)", fontSize: "13px" }}>
+              Loading account information...
+            </div>
           ) : accounts.length === 0 ? (
-            <p>No accounts found.</p>
+            <div className="vault-empty-card" style={{ padding: "32px 16px" }}>
+              <div className="vault-empty-icon">
+                <CreditCard />
+              </div>
+              <h4 className="vault-empty-title">No accounts yet</h4>
+              <p className="vault-empty-desc">
+                Customer accounts will be opened after administrator reviews your request.
+              </p>
+              <Link to="/account-request" className="vault-btn-secondary">
+                Request an account
+              </Link>
+            </div>
           ) : (
-            <div className="accounts-grid">
-              {accounts.map((account) => (
-                <article
-                  className="account-card"
-                  key={account._id}
-                >
-                  <div className="account-card-top">
-                    <Wallet size={23} />
-
-                    <span
-                      className={`account-status ${account.status.toLowerCase()}`}
-                    >
-                      {account.status}
-                    </span>
-                  </div>
-
-                  <p className="account-type">
-                    {account.accountType} ACCOUNT
-                  </p>
-
-                  <h3>
-                    {formatCurrency(account.balancePaise)}
-                  </h3>
-
-                  <p className="account-number">
-                    Account: {account.accountNumber}
-                  </p>
-
-                  <div className="account-id-row">
-                    <span className="account-id-label" title={account._id}>
-                      ID: <code>{account._id}</code>
-                    </span>
+            <div>
+              {accounts.map((acc) => (
+                <div key={acc._id} className="vault-account-card">
+                  <div className="vault-account-header">
+                    <span className="vault-account-type">{acc.accountType || acc.type} ACCOUNT</span>
                     <button
                       type="button"
-                      className="copy-id-btn"
-                      onClick={() => handleCopyId(account._id)}
-                      title="Copy Account ID for transfers"
+                      className="vault-copy-pill"
+                      title="Click to copy account ID"
+                      onClick={() => handleCopyId(acc._id)}
                     >
-                      {copiedId === account._id ? (
-                        <>
-                          <Check size={13} /> Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={13} /> Copy ID
-                        </>
-                      )}
+                      {copiedId === acc._id ? <Check size={11} color="var(--vault-success)" /> : <Copy size={11} />}
+                      <span>ID: {acc._id.slice(-6)}</span>
                     </button>
                   </div>
 
-                  <p className="account-currency">
-                    Currency: {account.currency}
-                  </p>
+                  <div className="vault-account-balance">
+                    ₹{((acc.balancePaise || 0) / 100).toFixed(2)}
+                  </div>
 
-                  <div className="account-card-actions">
+                  <div className="vault-account-footer">
+                    <span className={`vault-pill ${acc.status.toLowerCase()}`}>
+                      ● {acc.status}
+                    </span>
                     <Link
-                      to={`/deposit?account=${account._id}`}
-                      className="card-action-link"
-                      title="Deposit to this account"
+                      to={`/statements?account=${acc._id}`}
+                      style={{ color: "var(--vault-text-secondary)", fontSize: "11.5px", fontWeight: 500, textDecoration: "none" }}
                     >
-                      Deposit
-                    </Link>
-                    <Link
-                      to={`/withdrawal?account=${account._id}`}
-                      className="card-action-link"
-                      title="Withdraw from this account"
-                    >
-                      Withdraw
-                    </Link>
-                    <Link
-                      to={`/transfer?account=${account._id}`}
-                      className="card-action-link"
-                      title="Transfer from this account"
-                    >
-                      Transfer
-                    </Link>
-                    <Link
-                      to={`/transactions?account=${account._id}`}
-                      className="card-action-link view-history"
-                      title="View account ledger"
-                    >
-                      History
+                      View statement →
                     </Link>
                   </div>
-                </article>
+                </div>
               ))}
             </div>
           )}
-        </section>
-        {accountMessage && (
-  <div className="success-message" role="status">
-    {accountMessage}
-  </div>
-)}
-
-{accountError && !showCreateAccount && (
-  <div className="error-message" role="alert">
-    {accountError}
-  </div>
-)}
-
-{showCreateAccount && (
-  <div className="account-modal-overlay">
-    <div className="account-modal">
-      <h2>Open a Bank Account</h2>
-      <p>Select the type of account you want to create.</p>
-
-      <form onSubmit={handleCreateAccount}>
-        <label htmlFor="accountType">
-          Account Type
-        </label>
-
-        <select
-          id="accountType"
-          value={accountType}
-          onChange={(e) => setAccountType(e.target.value)}
-        >
-          <option value="SAVINGS">Savings Account</option>
-          <option value="CURRENT">Current Account</option>
-        </select>
-
-        {accountError && (
-          <div className="error-message" role="alert">
-            {accountError}
-          </div>
-        )}
-
-        <div className="account-modal-actions">
-          <button
-            type="button"
-            onClick={() => setShowCreateAccount(false)}
-            disabled={creatingAccount}
-          >
-            Cancel
-          </button>
-
-          <button
-            type="submit"
-            disabled={creatingAccount}
-          >
-            {creatingAccount
-              ? "Creating..."
-              : "Create Account"}
-          </button>
         </div>
-      </form>
-    </div>
-  </div>
-)}
 
-      </section>
-    </main>
+        {/* Right Column: Quick Actions */}
+        <div className="vault-panel">
+          <div className="vault-panel-header">
+            <div>
+              <div className="vault-panel-eyebrow">ON YOUR TERMS</div>
+              <div className="vault-panel-title" style={{ marginTop: "2px" }}>Quick actions</div>
+            </div>
+          </div>
+
+          <div className="vault-quick-actions-grid">
+            {/* Deposit */}
+            <button
+              type="button"
+              className="vault-quick-action-card"
+              onClick={() => {
+                if (accounts.length === 0) {
+                  alert("Please request or create an account first.");
+                  return;
+                }
+                setIsDepositOpen(true);
+              }}
+            >
+              <div className="vault-action-icon-circle">
+                <ArrowDownLeft />
+              </div>
+              <div className="vault-action-title">Deposit</div>
+              <div className="vault-action-sub">Add funds</div>
+            </button>
+
+            {/* Withdraw */}
+            <button
+              type="button"
+              className="vault-quick-action-card"
+              onClick={() => {
+                if (accounts.length === 0) {
+                  alert("Please request or create an account first.");
+                  return;
+                }
+                setIsWithdrawOpen(true);
+              }}
+            >
+              <div className="vault-action-icon-circle">
+                <ArrowUpRight />
+              </div>
+              <div className="vault-action-title">Withdraw</div>
+              <div className="vault-action-sub">Liquidate</div>
+            </button>
+
+            {/* Transfer */}
+            <button
+              type="button"
+              className="vault-quick-action-card"
+              onClick={() => {
+                if (accounts.length === 0) {
+                  alert("Please request or create an account first.");
+                  return;
+                }
+                setIsTransferOpen(true);
+              }}
+            >
+              <div className="vault-action-icon-circle">
+                <ArrowRightLeft />
+              </div>
+              <div className="vault-action-title">Transfer</div>
+              <div className="vault-action-sub">Between accounts</div>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* --------------------------------------------------------------------
+          BOTTOM SECTION: TRANSACTION ACTIVITY
+          -------------------------------------------------------------------- */}
+      <div className="vault-view-kicker">LEDGER</div>
+      <div className="vault-section-header" style={{ marginBottom: "16px" }}>
+        <h3 className="vault-section-title">Transaction activity</h3>
+        <Link to="/statements" className="vault-section-link">
+          <span>View all statements</span>
+          <ArrowRight size={13} />
+        </Link>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: "30px", textAlign: "center", color: "var(--vault-text-muted)" }}>
+          Loading ledger entries...
+        </div>
+      ) : accounts.length === 0 || transactions.length === 0 ? (
+        <div className="vault-empty-card">
+          <div className="vault-empty-icon">
+            <Activity />
+          </div>
+          <h4 className="vault-empty-title">No accounts available</h4>
+          <p className="vault-empty-desc">
+            Account activity will appear when you have open accounts.
+          </p>
+        </div>
+      ) : (
+        <div className="vault-table-wrapper">
+          <table className="vault-table">
+            <thead>
+              <tr>
+                <th>Date & Time</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Balance After</th>
+                <th>Integrity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((tx) => {
+                const isCredit =
+                  tx.type === "DEPOSIT" ||
+                  (tx.type === "TRANSFER" && tx.transferDirection === "INCOMING");
+                const amountFormatted = ((tx.amountPaise || 0) / 100).toFixed(2);
+                const balanceAfterFormatted = ((tx.balanceAfterPaise || 0) / 100).toFixed(2);
+
+                return (
+                  <tr key={tx._id}>
+                    <td style={{ color: "var(--vault-text-secondary)", fontSize: "12px" }}>
+                      {formatTxDate(tx.createdAt)}
+                    </td>
+                    <td>
+                      <span className={`vault-pill ${isCredit ? "active" : "pending"}`}>
+                        {tx.type}
+                      </span>
+                    </td>
+                    <td style={{ fontWeight: 500 }}>{tx.description || "Ledger entry"}</td>
+                    <td className={isCredit ? "vault-credit" : "vault-debit"}>
+                      {isCredit ? `+ ₹${amountFormatted}` : `- ₹${amountFormatted}`}
+                    </td>
+                    <td style={{ fontVariantNumeric: "tabular-nums" }}>₹{balanceAfterFormatted}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="vault-btn-secondary"
+                        style={{ padding: "4px 9px", fontSize: "11px" }}
+                        onClick={() => setActiveProofTxn(tx)}
+                      >
+                        <ShieldCheck size={13} />
+                        <span>Proof</span>
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Action Modals */}
+      <VaultDepositModal
+        isOpen={isDepositOpen}
+        onClose={() => setIsDepositOpen(false)}
+        accounts={accounts}
+        onSuccess={reloadData}
+      />
+      <VaultWithdrawModal
+        isOpen={isWithdrawOpen}
+        onClose={() => setIsWithdrawOpen(false)}
+        accounts={accounts}
+        onSuccess={reloadData}
+      />
+      <VaultTransferModal
+        isOpen={isTransferOpen}
+        onClose={() => setIsTransferOpen(false)}
+        accounts={accounts}
+        onSuccess={reloadData}
+      />
+      <VaultProofModal
+        isOpen={Boolean(activeProofTxn)}
+        onClose={() => setActiveProofTxn(null)}
+        transaction={activeProofTxn}
+      />
+    </VaultLayout>
   );
 }
-
-export default Dashboard;
