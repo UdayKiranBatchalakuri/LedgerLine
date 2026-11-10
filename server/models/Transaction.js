@@ -67,6 +67,16 @@ const transactionSchema = new mongoose.Schema(
       immutable: true
     },
 
+    idempotencyKey: {
+      type: String,
+      immutable: true
+    },
+
+    requestHash: {
+      type: String,
+      immutable: true
+    },
+
     description: {
       type: String,
       trim: true,
@@ -80,5 +90,15 @@ const transactionSchema = new mongoose.Schema(
 );
 
 transactionSchema.index({ account: 1, createdAt: -1 });
+
+transactionSchema.index(
+  { owner: 1, idempotencyKey: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      idempotencyKey: { $type: "string" }
+    }
+  }
+);
 
 module.exports = mongoose.model("Transaction", transactionSchema);

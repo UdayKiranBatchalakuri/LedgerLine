@@ -94,13 +94,8 @@ const login = async (req, res) => {
     }
 
     const { email, password } = result.data;
+    
 
-const getMe = async (req, res) => {
-  return res.status(200).json({
-    success: true,
-    user: req.user
-  });
-};
 
 
     // 2. Find user and retrieve password hash

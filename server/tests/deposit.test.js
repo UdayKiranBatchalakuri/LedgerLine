@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const { test } = require("node:test");
@@ -73,241 +72,419 @@ test("LedgerLine deposit API tests", async (t) => {
 
     const initialBalance = account.balancePaise;
 
-    await t.test("should complete a valid deposit and create a ledger entry", async () => {
-      const response = await request(app)
-        .post("/api/transactions/deposit")
-        .set("Authorization", `Bearer ${holderToken}`)
-        .send({
-          accountId: account._id.toString(),
-          amountPaise: 5000,
-          description: "Test deposit"
-        });
+    // ============================================
+    // SUCCESSFUL DEPOSIT
+    // ============================================
 
-      assert.equal(response.status, 201);
-      assert.equal(response.body.success, true);
-      assert.equal(response.body.balancePaise, initialBalance + 5000);
-
-      const updatedAccount = await Account.findById(account._id);
-      assert.equal(updatedAccount.balancePaise, initialBalance + 5000);
-
-      const transaction = await Transaction.findOne({
-        account: account._id,
-        type: "DEPOSIT"
-      });
-
-      assert.ok(transaction);
-      assert.equal(transaction.amountPaise, 5000);
-      assert.equal(transaction.balanceAfterPaise, initialBalance + 5000);
-      assert.equal(transaction.description, "Test deposit");
-    });
-
-    await t.test("should reject a deposit without authentication", async () => {
-      const response = await request(app)
-        .post("/api/transactions/deposit")
-        .send({
-          accountId: account._id.toString(),
-          amountPaise: 1000
-        });
-
-      assert.equal(response.status, 401);
-    });
-
-    await t.test("should reject zero, negative and decimal amounts", async () => {
-      for (const amountPaise of [
-        0,
-        -100,
-        10.5,
-        Number.MAX_SAFE_INTEGER + 1
-      ]) {
+    await t.test(
+      "should complete a valid deposit and create a ledger entry",
+      async () => {
         const response = await request(app)
           .post("/api/transactions/deposit")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             accountId: account._id.toString(),
-            amountPaise
+            amountPaise: 5000,
+            description: "Test deposit"
+          });
+
+        assert.equal(response.status, 201);
+        assert.equal(response.body.success, true);
+        assert.equal(response.body.balancePaise, initialBalance + 5000);
+
+        const updatedAccount = await Account.findById(account._id);
+
+        assert.equal(
+          updatedAccount.balancePaise,
+          initialBalance + 5000
+        );
+
+        const transaction = await Transaction.findOne({
+          account: account._id,
+          type: "DEPOSIT"
+        });
+
+        assert.ok(transaction);
+        assert.equal(transaction.amountPaise, 5000);
+        assert.equal(
+          transaction.balanceAfterPaise,
+          initialBalance + 5000
+        );
+        assert.equal(transaction.description, "Test deposit");
+      }
+    );
+
+    // ============================================
+    // AUTHENTICATION
+    // ============================================
+
+    await t.test(
+      "should reject a deposit without authentication",
+      async () => {
+        const response = await request(app)
+          .post("/api/transactions/deposit")
+          .send({
+            accountId: account._id.toString(),
+            amountPaise: 1000
+          });
+
+        assert.equal(response.status, 401);
+      }
+    );
+
+    // ============================================
+    // AMOUNT VALIDATION
+    // ============================================
+
+    await t.test(
+      "should reject zero, negative, decimal and unsafe amounts",
+      async () => {
+        for (const amountPaise of [
+          0,
+          -100,
+          10.5,
+          Number.MAX_SAFE_INTEGER + 1
+        ]) {
+          const response = await request(app)
+            .post("/api/transactions/deposit")
+            .set("Authorization", `Bearer ${holderToken}`)
+            .set("Idempotency-Key", randomUUID())
+            .send({
+              accountId: account._id.toString(),
+              amountPaise
+            });
+
+          assert.equal(response.status, 400);
+        }
+      }
+    );
+
+    // ============================================
+    // ACCOUNT ID VALIDATION
+    // ============================================
+
+    await t.test(
+      "should reject an invalid account ID",
+      async () => {
+        const response = await request(app)
+          .post("/api/transactions/deposit")
+          .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
+          .send({
+            accountId: "invalid-id",
+            amountPaise: 1000
           });
 
         assert.equal(response.status, 400);
       }
-    });
+    );
 
-    await t.test("should reject an invalid account ID", async () => {
-      const response = await request(app)
-        .post("/api/transactions/deposit")
-        .set("Authorization", `Bearer ${holderToken}`)
-        .send({
-          accountId: "invalid-id",
-          amountPaise: 1000
-        });
+    // ============================================
+    // OWNERSHIP VALIDATION
+    // ============================================
 
-      assert.equal(response.status, 400);
-    });
+    await t.test(
+      "should reject deposits into another user's account",
+      async () => {
+        const response = await request(app)
+          .post("/api/transactions/deposit")
+          .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
+          .send({
+            accountId: anotherAccount._id.toString(),
+            amountPaise: 1000
+          });
 
-    await t.test("should reject deposits into another user's account", async () => {
-      const response = await request(app)
-        .post("/api/transactions/deposit")
-        .set("Authorization", `Bearer ${holderToken}`)
-        .send({
-          accountId: anotherAccount._id.toString(),
-          amountPaise: 1000
-        });
+        assert.equal(response.status, 404);
+      }
+    );
 
-      assert.equal(response.status, 404);
-    });
+    // ============================================
+    // FROZEN ACCOUNT
+    // ============================================
 
-    await t.test("should reject deposits into a frozen account", async () => {
-      const response = await request(app)
-        .post("/api/transactions/deposit")
-        .set("Authorization", `Bearer ${holderToken}`)
-        .send({
-          accountId: frozenAccount._id.toString(),
-          amountPaise: 1000
-        });
+    await t.test(
+      "should reject deposits into a frozen account",
+      async () => {
+        const response = await request(app)
+          .post("/api/transactions/deposit")
+          .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
+          .send({
+            accountId: frozenAccount._id.toString(),
+            amountPaise: 1000
+          });
 
-      assert.equal(response.status, 409);
-    });
+        assert.equal(response.status, 409);
+      }
+    );
 
-    await t.test("should reject deposits by an ADMIN", async () => {
-      const response = await request(app)
-        .post("/api/transactions/deposit")
-        .set("Authorization", `Bearer ${adminToken}`)
-        .send({
-          accountId: account._id.toString(),
-          amountPaise: 1000
-        });
+    // ============================================
+    // ROLE VALIDATION
+    // ============================================
 
-      assert.equal(response.status, 403);
-    });
+    await t.test(
+      "should reject deposits by an ADMIN",
+      async () => {
+        const response = await request(app)
+          .post("/api/transactions/deposit")
+          .set("Authorization", `Bearer ${adminToken}`)
+          .set("Idempotency-Key", randomUUID())
+          .send({
+            accountId: account._id.toString(),
+            amountPaise: 1000
+          });
 
-    await t.test("should reject an account that does not exist", async () => {
-      const missingId = new mongoose.Types.ObjectId();
+        assert.equal(response.status, 403);
+      }
+    );
 
-      const response = await request(app)
-        .post("/api/transactions/deposit")
-        .set("Authorization", `Bearer ${holderToken}`)
-        .send({
-          accountId: missingId.toString(),
-          amountPaise: 1000
-        });
+    // ============================================
+    // MISSING ACCOUNT
+    // ============================================
 
-      assert.equal(response.status, 404);
-    });
-
-    await t.test("should reject descriptions longer than 200 characters", async () => {
-      const response = await request(app)
-        .post("/api/transactions/deposit")
-        .set("Authorization", `Bearer ${holderToken}`)
-        .send({
-          accountId: account._id.toString(),
-          amountPaise: 1000,
-          description: "x".repeat(201)
-        });
-
-      assert.equal(response.status, 400);
-    });
-
-    await t.test("should not change balance when a deposit is rejected", async () => {
-      const before = await Account.findById(account._id);
-
-      const response = await request(app)
-        .post("/api/transactions/deposit")
-        .set("Authorization", `Bearer ${holderToken}`)
-        .send({
-          accountId: frozenAccount._id.toString(),
-          amountPaise: 1000
-        });
-
-      assert.equal(response.status, 409);
-
-      const after = await Account.findById(account._id);
-      assert.equal(after.balancePaise, before.balancePaise);
-    });
-
-    // Test atomic rollback when the ledger insert fails.
-    await t.test("should roll back the balance if ledger creation fails", async () => {
-      const rollbackAccount = await makeAccount(holder);
-      const beforeBalance = rollbackAccount.balancePaise;
-
-      const originalCreate = Transaction.create;
-
-      try {
-        Transaction.create = async () => {
-          throw new Error("Simulated ledger write failure");
-        };
+    await t.test(
+      "should reject an account that does not exist",
+      async () => {
+        const missingId = new mongoose.Types.ObjectId();
 
         const response = await request(app)
           .post("/api/transactions/deposit")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
-            accountId: rollbackAccount._id.toString(),
-            amountPaise: 2500
+            accountId: missingId.toString(),
+            amountPaise: 1000
           });
 
-        assert.equal(response.status, 500);
-
-        const afterAccount = await Account.findById(rollbackAccount._id);
-
-        assert.equal(afterAccount.balancePaise, beforeBalance);
-
-        const transactionCount = await Transaction.countDocuments({
-          account: rollbackAccount._id
-        });
-
-        assert.equal(transactionCount, 0);
-      } finally {
-        Transaction.create = originalCreate;
+        assert.equal(response.status, 404);
       }
-    });
+    );
 
-    // Test simultaneous deposits against the same account.
-    await t.test("should process concurrent deposits without losing updates", async () => {
-      const concurrentAccount = await makeAccount(holder);
+    // ============================================
+    // DESCRIPTION VALIDATION
+    // ============================================
 
-      const startingBalance = concurrentAccount.balancePaise;
-      const depositAmount = 1250;
-      const numberOfDeposits = 8;
+    await t.test(
+      "should reject descriptions longer than 200 characters",
+      async () => {
+        const response = await request(app)
+          .post("/api/transactions/deposit")
+          .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
+          .send({
+            accountId: account._id.toString(),
+            amountPaise: 1000,
+            description: "x".repeat(201)
+          });
 
-      const responses = await Promise.all(
-        Array.from({ length: numberOfDeposits }, () =>
-          request(app)
+        assert.equal(response.status, 400);
+      }
+    );
+
+    // ============================================
+    // REJECTED DEPOSIT
+    // ============================================
+
+    await t.test(
+      "should not change balance when a deposit is rejected",
+      async () => {
+        const before = await Account.findById(account._id);
+
+        const response = await request(app)
+          .post("/api/transactions/deposit")
+          .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
+          .send({
+            accountId: frozenAccount._id.toString(),
+            amountPaise: 1000
+          });
+
+        assert.equal(response.status, 409);
+
+        const after = await Account.findById(account._id);
+
+        assert.equal(
+          after.balancePaise,
+          before.balancePaise
+        );
+      }
+    );
+
+    // ============================================
+    // TRANSACTION ROLLBACK
+    // ============================================
+
+    await t.test(
+      "should roll back the balance if ledger creation fails",
+      async () => {
+        const rollbackAccount = await makeAccount(holder);
+        const beforeBalance = rollbackAccount.balancePaise;
+
+        const originalCreate = Transaction.create;
+
+        try {
+          Transaction.create = async () => {
+            throw new Error("Simulated ledger write failure");
+          };
+
+          const response = await request(app)
             .post("/api/transactions/deposit")
             .set("Authorization", `Bearer ${holderToken}`)
+            .set("Idempotency-Key", randomUUID())
             .send({
-              accountId: concurrentAccount._id.toString(),
-              amountPaise: depositAmount,
-              description: "Concurrent deposit test"
-            })
-        )
-      );
+              accountId: rollbackAccount._id.toString(),
+              amountPaise: 2500
+            });
 
-      for (const response of responses) {
-        assert.equal(response.status, 201);
+          assert.equal(response.status, 500);
+
+          const afterAccount = await Account.findById(
+            rollbackAccount._id
+          );
+
+          assert.equal(
+            afterAccount.balancePaise,
+            beforeBalance
+          );
+
+          const transactionCount = await Transaction.countDocuments({
+            account: rollbackAccount._id
+          });
+
+          assert.equal(transactionCount, 0);
+        } finally {
+          Transaction.create = originalCreate;
+        }
       }
+    );
 
-      const finalAccount = await Account.findById(concurrentAccount._id);
+    // ============================================
+    // CONCURRENT DEPOSITS
+    // ============================================
 
-      assert.equal(
-        finalAccount.balancePaise,
-        startingBalance + numberOfDeposits * depositAmount
-      );
+    await t.test(
+      "should process concurrent deposits without losing updates",
+      async () => {
+        const concurrentAccount = await makeAccount(holder);
 
-      const transactions = await Transaction.find({
-        account: concurrentAccount._id,
-        type: "DEPOSIT"
-      }).sort({ balanceAfterPaise: 1 });
+        const startingBalance = concurrentAccount.balancePaise;
+        const depositAmount = 1250;
+        const numberOfDeposits = 8;
 
-      assert.equal(transactions.length, numberOfDeposits);
+        const responses = await Promise.all(
+          Array.from({ length: numberOfDeposits }, () =>
+            request(app)
+              .post("/api/transactions/deposit")
+              .set("Authorization", `Bearer ${holderToken}`)
+              .set("Idempotency-Key", randomUUID())
+              .send({
+                accountId: concurrentAccount._id.toString(),
+                amountPaise: depositAmount,
+                description: "Concurrent deposit test"
+              })
+          )
+        );
 
-      const expectedBalances = Array.from(
-        { length: numberOfDeposits },
-        (_, index) => startingBalance + (index + 1) * depositAmount
-      );
+        for (const response of responses) {
+          assert.equal(response.status, 201);
+        }
 
-      assert.deepEqual(
-        transactions.map((transaction) => transaction.balanceAfterPaise),
-        expectedBalances
-      );
-    });
+        const finalAccount = await Account.findById(
+          concurrentAccount._id
+        );
+
+        assert.equal(
+          finalAccount.balancePaise,
+          startingBalance + numberOfDeposits * depositAmount
+        );
+
+        const transactions = await Transaction.find({
+          account: concurrentAccount._id,
+          type: "DEPOSIT"
+        }).sort({ balanceAfterPaise: 1 });
+
+        assert.equal(transactions.length, numberOfDeposits);
+
+        const expectedBalances = Array.from(
+          { length: numberOfDeposits },
+          (_, index) =>
+            startingBalance + (index + 1) * depositAmount
+        );
+
+        assert.deepEqual(
+          transactions.map(
+            (transaction) => transaction.balanceAfterPaise
+          ),
+          expectedBalances
+        );
+      }
+    );
+
+    // ============================================
+    // IDEMPOTENCY
+    // ============================================
+
+    await t.test(
+      "should apply a repeated deposit idempotency key only once",
+      async () => {
+        const idempotentAccount = await makeAccount(holder);
+        const idempotencyKey = randomUUID();
+
+        const payload = {
+          accountId: idempotentAccount._id.toString(),
+          amountPaise: 2200,
+          description: "Idempotent deposit test"
+        };
+
+        const firstResponse = await request(app)
+          .post("/api/transactions/deposit")
+          .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", idempotencyKey)
+          .send(payload);
+
+        const secondResponse = await request(app)
+          .post("/api/transactions/deposit")
+          .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", idempotencyKey)
+          .send(payload);
+
+        assert.equal(firstResponse.status, 201);
+        assert.equal(secondResponse.status, 200);
+
+        const finalAccount = await Account.findById(
+          idempotentAccount._id
+        );
+
+        assert.equal(finalAccount.balancePaise, 12200);
+
+        const count = await Transaction.countDocuments({
+          account: idempotentAccount._id,
+          type: "DEPOSIT"
+        });
+
+        assert.equal(count, 1);
+
+        // Reusing the key with a different payload must be rejected.
+        const changedPayloadResponse = await request(app)
+          .post("/api/transactions/deposit")
+          .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", idempotencyKey)
+          .send({
+            ...payload,
+            amountPaise: 3300
+          });
+
+        assert.equal(changedPayloadResponse.status, 409);
+
+        const unchangedAccount = await Account.findById(
+          idempotentAccount._id
+        );
+
+        assert.equal(unchangedAccount.balancePaise, 12200);
+      }
+    );
 
   } finally {
     // Clean up only records created by this test.

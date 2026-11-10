@@ -1,12 +1,177 @@
-
 const mongoose = require("mongoose");
 const crypto = require("node:crypto");
 const Account = require("../models/Account");
 const Transaction = require("../models/Transaction");
 
 // ============================================
+// IDEMPOTENCY HELPERS
+// ============================================
+
+const getIdempotencyKey = (req) => {
+  const key = req.get("Idempotency-Key");
+
+  if (
+    typeof key !== "string" ||
+    key.trim().length === 0 ||
+    key.length > 128
+  ) {
+    return {
+      error: "A valid Idempotency-Key header is required (maximum 128 characters)"
+    };
+  }
+
+  return { key: key.trim() };
+};
+
+const createRequestHash = (payload) => {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(payload))
+    .digest("hex");
+};
+
+const isIdempotencyDuplicate = (error) => {
+  if (error.code !== 11000) return false;
+
+  return Boolean(
+    error.keyPattern?.idempotencyKey ||
+    error.keyValue?.idempotencyKey ||
+    error.message?.includes("owner_1_idempotencyKey_1")
+  );
+};
+
+const replayAfterDuplicate = async (
+  req,
+  res,
+  key,
+  requestHash,
+  successMessage
+) => {
+  const replayed = await replayExistingTransaction(
+    req,
+    res,
+    key,
+    requestHash,
+    successMessage
+  );
+
+  if (replayed) return true;
+
+  res.status(503).json({
+    success: false,
+    message: "The request may still be processing. Retry using the same Idempotency-Key."
+  });
+
+  return true;
+};
+
+const replayExistingTransaction = async (
+  req,
+  res,
+  key,
+  requestHash,
+  successMessage
+) => {
+  const existing = await Transaction.findOne({
+    owner: req.user.id,
+    idempotencyKey: key
+  });
+
+  if (!existing) {
+    return false;
+  }
+
+  if (existing.requestHash !== requestHash) {
+    res.status(409).json({
+      success: false,
+      message: "Idempotency key was already used for a different request"
+    });
+
+    return true;
+  }
+
+  // TRANSFER REPLAY
+  if (existing.type === "TRANSFER") {
+    const incoming = await Transaction.findOne({
+      transferId: existing.transferId,
+      transferDirection: "INCOMING"
+    });
+
+    if (!incoming) {
+      res.status(500).json({
+        success: false,
+        message: "Unable to retrieve the original transfer"
+      });
+
+      return true;
+    }
+
+    const [sourceAccount, destinationAccount] = await Promise.all([
+      Account.findById(existing.account).select("accountNumber"),
+      Account.findById(incoming.account).select("accountNumber")
+    ]);
+
+    if (!sourceAccount || !destinationAccount) {
+      res.status(500).json({
+        success: false,
+        message: "Unable to retrieve the original transfer accounts"
+      });
+
+      return true;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `${successMessage} (original result)`,
+      transferId: existing.transferId,
+      amountPaise: existing.amountPaise,
+
+      sourceAccount: {
+        accountNumber: sourceAccount.accountNumber,
+        balancePaise: existing.balanceAfterPaise
+      },
+
+      destinationAccount: {
+        accountNumber: destinationAccount.accountNumber,
+        balancePaise: incoming.balanceAfterPaise
+      },
+
+      outgoingTransaction: existing,
+      incomingTransaction: incoming
+    });
+
+    return true;
+  }
+
+  // DEPOSIT / WITHDRAWAL REPLAY
+  const account = await Account.findById(existing.account)
+    .select("accountNumber");
+
+  if (!account) {
+    res.status(500).json({
+      success: false,
+      message: "Unable to retrieve the original transaction account"
+    });
+
+    return true;
+  }
+
+  res.status(200).json({
+    success: true,
+    message: `${successMessage} (original result)`,
+    accountNumber: account.accountNumber,
+    balancePaise: existing.balanceAfterPaise,
+    transaction: existing
+  });
+
+  return true;
+};
+
+
+// ============================================
 // CREATE ACCOUNT
 // ============================================
+
 const createAccount = async (req, res) => {
   try {
     const { accountType } = req.body;
@@ -69,6 +234,7 @@ const createAccount = async (req, res) => {
 // ============================================
 // GET ACCOUNTS BASED ON USER ROLE
 // ============================================
+
 const getAccounts = async (req, res) => {
   try {
     let filter = {};
@@ -112,6 +278,7 @@ const getAccounts = async (req, res) => {
 // ============================================
 // DEPOSIT MONEY
 // ============================================
+
 const depositMoney = async (req, res) => {
   const { accountId, amountPaise, description } = req.body;
 
@@ -149,6 +316,46 @@ const depositMoney = async (req, res) => {
     });
   }
 
+  // VALIDATE IDEMPOTENCY KEY
+  const { key, error: keyError } = getIdempotencyKey(req);
+
+  if (keyError) {
+    return res.status(400).json({
+      success: false,
+      message: keyError
+    });
+  }
+
+  // CREATE REQUEST HASH
+  const requestHash = createRequestHash({
+    operation: "DEPOSIT",
+    userId: req.user.id,
+    accountId: String(accountId),
+    amountPaise,
+    description: description ?? ""
+  });
+
+  // CHECK FOR EXISTING REQUEST
+  try {
+    const replayed = await replayExistingTransaction(
+      req,
+      res,
+      key,
+      requestHash,
+      "Deposit completed successfully"
+    );
+
+    if (replayed) return;
+
+  } catch (error) {
+    console.error("Deposit idempotency lookup error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to verify deposit request"
+    });
+  }
+
   const session = await mongoose.startSession();
 
   try {
@@ -156,6 +363,8 @@ const depositMoney = async (req, res) => {
     const reference = crypto.randomUUID();
 
     await session.withTransaction(async () => {
+
+      // UPDATE ACCOUNT BALANCE
       const account = await Account.findOneAndUpdate(
         {
           _id: accountId,
@@ -200,6 +409,7 @@ const depositMoney = async (req, res) => {
         throw error;
       }
 
+      // CREATE LEDGER ENTRY
       const [transaction] = await Transaction.create(
         [
           {
@@ -209,6 +419,8 @@ const depositMoney = async (req, res) => {
             amountPaise,
             balanceAfterPaise: account.balancePaise,
             reference,
+            idempotencyKey: key,
+            requestHash,
             description
           }
         ],
@@ -232,6 +444,30 @@ const depositMoney = async (req, res) => {
     });
 
   } catch (error) {
+
+    // HANDLE CONCURRENT DUPLICATE REQUEST
+    if (isIdempotencyDuplicate(error)) {
+      try {
+        await replayAfterDuplicate(
+          req,
+          res,
+          key,
+          requestHash,
+          "Deposit completed successfully"
+        );
+
+        return;
+
+      } catch (replayError) {
+        console.error("Deposit replay error:", replayError.message);
+
+        return res.status(503).json({
+          success: false,
+          message: "Unable to confirm the original deposit. Retry with the same Idempotency-Key."
+        });
+      }
+    }
+
     if (error.statusCode) {
       return res.status(error.statusCode).json({
         success: false,
@@ -255,6 +491,7 @@ const depositMoney = async (req, res) => {
 // ============================================
 // WITHDRAW MONEY
 // ============================================
+
 const withdrawMoney = async (req, res) => {
   const { accountId, amountPaise, description } = req.body;
 
@@ -292,6 +529,46 @@ const withdrawMoney = async (req, res) => {
     });
   }
 
+  // VALIDATE IDEMPOTENCY KEY
+  const { key, error: keyError } = getIdempotencyKey(req);
+
+  if (keyError) {
+    return res.status(400).json({
+      success: false,
+      message: keyError
+    });
+  }
+
+  // CREATE REQUEST HASH
+  const requestHash = createRequestHash({
+    operation: "WITHDRAWAL",
+    userId: req.user.id,
+    accountId: String(accountId),
+    amountPaise,
+    description: description ?? ""
+  });
+
+  // CHECK FOR EXISTING REQUEST
+  try {
+    const replayed = await replayExistingTransaction(
+      req,
+      res,
+      key,
+      requestHash,
+      "Withdrawal completed successfully"
+    );
+
+    if (replayed) return;
+
+  } catch (error) {
+    console.error("Withdrawal idempotency lookup error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to verify withdrawal request"
+    });
+  }
+
   const session = await mongoose.startSession();
 
   try {
@@ -299,6 +576,8 @@ const withdrawMoney = async (req, res) => {
     const reference = crypto.randomUUID();
 
     await session.withTransaction(async () => {
+
+      // UPDATE ACCOUNT BALANCE
       const account = await Account.findOneAndUpdate(
         {
           _id: accountId,
@@ -343,6 +622,7 @@ const withdrawMoney = async (req, res) => {
         throw error;
       }
 
+      // CREATE LEDGER ENTRY
       const [transaction] = await Transaction.create(
         [
           {
@@ -352,6 +632,8 @@ const withdrawMoney = async (req, res) => {
             amountPaise,
             balanceAfterPaise: account.balancePaise,
             reference,
+            idempotencyKey: key,
+            requestHash,
             description
           }
         ],
@@ -375,6 +657,30 @@ const withdrawMoney = async (req, res) => {
     });
 
   } catch (error) {
+
+    // HANDLE CONCURRENT DUPLICATE REQUEST
+    if (isIdempotencyDuplicate(error)) {
+      try {
+        await replayAfterDuplicate(
+          req,
+          res,
+          key,
+          requestHash,
+          "Withdrawal completed successfully"
+        );
+
+        return;
+
+      } catch (replayError) {
+        console.error("Withdrawal replay error:", replayError.message);
+
+        return res.status(503).json({
+          success: false,
+          message: "Unable to confirm the original withdrawal. Retry with the same Idempotency-Key."
+        });
+      }
+    }
+
     if (error.statusCode) {
       return res.status(error.statusCode).json({
         success: false,
@@ -398,6 +704,7 @@ const withdrawMoney = async (req, res) => {
 // ============================================
 // FUND TRANSFER
 // ============================================
+
 const transferMoney = async (req, res) => {
   const {
     sourceAccountId,
@@ -406,7 +713,7 @@ const transferMoney = async (req, res) => {
     description
   } = req.body;
 
-  // Validate source account ID
+  // VALIDATE SOURCE ACCOUNT ID
   if (!mongoose.isValidObjectId(sourceAccountId)) {
     return res.status(400).json({
       success: false,
@@ -414,7 +721,7 @@ const transferMoney = async (req, res) => {
     });
   }
 
-  // Validate destination account ID
+  // VALIDATE DESTINATION ACCOUNT ID
   if (!mongoose.isValidObjectId(destinationAccountId)) {
     return res.status(400).json({
       success: false,
@@ -425,7 +732,7 @@ const transferMoney = async (req, res) => {
   const sourceId = new mongoose.Types.ObjectId(sourceAccountId);
   const destinationId = new mongoose.Types.ObjectId(destinationAccountId);
 
-  // Prevent transfers to the same account
+  // PREVENT TRANSFER TO SAME ACCOUNT
   if (sourceId.equals(destinationId)) {
     return res.status(400).json({
       success: false,
@@ -433,7 +740,7 @@ const transferMoney = async (req, res) => {
     });
   }
 
-  // Validate amount
+  // VALIDATE AMOUNT
   if (
     !Number.isSafeInteger(amountPaise) ||
     amountPaise <= 0
@@ -444,7 +751,7 @@ const transferMoney = async (req, res) => {
     });
   }
 
-  // Validate description
+  // VALIDATE DESCRIPTION
   if (
     description !== undefined &&
     (typeof description !== "string" || description.length > 200)
@@ -462,6 +769,47 @@ const transferMoney = async (req, res) => {
     });
   }
 
+  // VALIDATE IDEMPOTENCY KEY
+  const { key, error: keyError } = getIdempotencyKey(req);
+
+  if (keyError) {
+    return res.status(400).json({
+      success: false,
+      message: keyError
+    });
+  }
+
+  // CREATE REQUEST HASH
+  const requestHash = createRequestHash({
+    operation: "TRANSFER",
+    userId: req.user.id,
+    sourceAccountId: String(sourceId),
+    destinationAccountId: String(destinationId),
+    amountPaise,
+    description: description ?? ""
+  });
+
+  // CHECK FOR EXISTING REQUEST
+  try {
+    const replayed = await replayExistingTransaction(
+      req,
+      res,
+      key,
+      requestHash,
+      "Transfer completed successfully"
+    );
+
+    if (replayed) return;
+
+  } catch (error) {
+    console.error("Transfer idempotency lookup error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to verify transfer request"
+    });
+  }
+
   const session = await mongoose.startSession();
 
   try {
@@ -473,7 +821,7 @@ const transferMoney = async (req, res) => {
 
     await session.withTransaction(async () => {
 
-      // STEP 1: Debit source account
+      // STEP 1: DEBIT SOURCE ACCOUNT
       const sourceAccount = await Account.findOneAndUpdate(
         {
           _id: sourceId,
@@ -518,7 +866,7 @@ const transferMoney = async (req, res) => {
         throw error;
       }
 
-      // STEP 2: Credit destination account
+      // STEP 2: CREDIT DESTINATION ACCOUNT
       const destinationAccount = await Account.findOneAndUpdate(
         {
           _id: destinationId,
@@ -561,7 +909,7 @@ const transferMoney = async (req, res) => {
         throw error;
       }
 
-      // STEP 3: Create two linked ledger entries
+      // STEP 3: CREATE TWO LINKED LEDGER ENTRIES
       const [
         outgoingTransaction,
         incomingTransaction
@@ -576,6 +924,8 @@ const transferMoney = async (req, res) => {
             reference: outgoingReference,
             transferId,
             transferDirection: "OUTGOING",
+            idempotencyKey: key,
+            requestHash,
             description
           },
           {
@@ -622,6 +972,30 @@ const transferMoney = async (req, res) => {
     });
 
   } catch (error) {
+
+    // HANDLE CONCURRENT DUPLICATE REQUEST
+    if (isIdempotencyDuplicate(error)) {
+      try {
+        await replayAfterDuplicate(
+          req,
+          res,
+          key,
+          requestHash,
+          "Transfer completed successfully"
+        );
+
+        return;
+
+      } catch (replayError) {
+        console.error("Transfer replay error:", replayError.message);
+
+        return res.status(503).json({
+          success: false,
+          message: "Unable to confirm the original transfer. Retry with the same Idempotency-Key."
+        });
+      }
+    }
+
     if (error.statusCode) {
       return res.status(error.statusCode).json({
         success: false,
@@ -645,6 +1019,7 @@ const transferMoney = async (req, res) => {
 // ============================================
 // EXPORT CONTROLLERS
 // ============================================
+
 module.exports = {
   createAccount,
   getAccounts,

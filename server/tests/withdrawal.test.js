@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const { test } = require("node:test");
@@ -71,6 +70,10 @@ test("LedgerLine withdrawal API tests", async (t) => {
     const holderToken = tokenFor(holder);
     const adminToken = tokenFor(admin);
 
+    // ============================================
+    // SUCCESSFUL WITHDRAWAL
+    // ============================================
+
     await t.test(
       "should complete a valid withdrawal and create a ledger entry",
       async () => {
@@ -79,6 +82,7 @@ test("LedgerLine withdrawal API tests", async (t) => {
         const response = await request(app)
           .post("/api/transactions/withdraw")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             accountId: account._id.toString(),
             amountPaise: 3000,
@@ -87,9 +91,13 @@ test("LedgerLine withdrawal API tests", async (t) => {
 
         assert.equal(response.status, 201);
         assert.equal(response.body.success, true);
-        assert.equal(response.body.balancePaise, initialBalance - 3000);
+        assert.equal(
+          response.body.balancePaise,
+          initialBalance - 3000
+        );
 
         const updatedAccount = await Account.findById(account._id);
+
         assert.equal(
           updatedAccount.balancePaise,
           initialBalance - 3000
@@ -110,6 +118,10 @@ test("LedgerLine withdrawal API tests", async (t) => {
       }
     );
 
+    // ============================================
+    // AUTHENTICATION
+    // ============================================
+
     await t.test(
       "should reject a withdrawal without authentication",
       async () => {
@@ -124,6 +136,10 @@ test("LedgerLine withdrawal API tests", async (t) => {
       }
     );
 
+    // ============================================
+    // AMOUNT VALIDATION
+    // ============================================
+
     await t.test(
       "should reject zero, negative, decimal and unsafe amounts",
       async () => {
@@ -136,6 +152,7 @@ test("LedgerLine withdrawal API tests", async (t) => {
           const response = await request(app)
             .post("/api/transactions/withdraw")
             .set("Authorization", `Bearer ${holderToken}`)
+            .set("Idempotency-Key", randomUUID())
             .send({
               accountId: account._id.toString(),
               amountPaise
@@ -146,12 +163,17 @@ test("LedgerLine withdrawal API tests", async (t) => {
       }
     );
 
+    // ============================================
+    // ACCOUNT ID VALIDATION
+    // ============================================
+
     await t.test(
       "should reject an invalid account ID",
       async () => {
         const response = await request(app)
           .post("/api/transactions/withdraw")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             accountId: "invalid-id",
             amountPaise: 1000
@@ -161,12 +183,17 @@ test("LedgerLine withdrawal API tests", async (t) => {
       }
     );
 
+    // ============================================
+    // OWNERSHIP VALIDATION
+    // ============================================
+
     await t.test(
       "should reject withdrawals from another user's account",
       async () => {
         const response = await request(app)
           .post("/api/transactions/withdraw")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             accountId: anotherAccount._id.toString(),
             amountPaise: 1000
@@ -176,12 +203,17 @@ test("LedgerLine withdrawal API tests", async (t) => {
       }
     );
 
+    // ============================================
+    // FROZEN ACCOUNT
+    // ============================================
+
     await t.test(
       "should reject withdrawals from a frozen account",
       async () => {
         const response = await request(app)
           .post("/api/transactions/withdraw")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             accountId: frozenAccount._id.toString(),
             amountPaise: 1000
@@ -191,12 +223,17 @@ test("LedgerLine withdrawal API tests", async (t) => {
       }
     );
 
+    // ============================================
+    // ROLE VALIDATION
+    // ============================================
+
     await t.test(
       "should reject withdrawals by an ADMIN",
       async () => {
         const response = await request(app)
           .post("/api/transactions/withdraw")
           .set("Authorization", `Bearer ${adminToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             accountId: account._id.toString(),
             amountPaise: 1000
@@ -206,6 +243,10 @@ test("LedgerLine withdrawal API tests", async (t) => {
       }
     );
 
+    // ============================================
+    // MISSING ACCOUNT
+    // ============================================
+
     await t.test(
       "should reject an account that does not exist",
       async () => {
@@ -214,6 +255,7 @@ test("LedgerLine withdrawal API tests", async (t) => {
         const response = await request(app)
           .post("/api/transactions/withdraw")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             accountId: missingId.toString(),
             amountPaise: 1000
@@ -223,12 +265,17 @@ test("LedgerLine withdrawal API tests", async (t) => {
       }
     );
 
+    // ============================================
+    // DESCRIPTION VALIDATION
+    // ============================================
+
     await t.test(
       "should reject descriptions longer than 200 characters",
       async () => {
         const response = await request(app)
           .post("/api/transactions/withdraw")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             accountId: account._id.toString(),
             amountPaise: 1000,
@@ -238,6 +285,10 @@ test("LedgerLine withdrawal API tests", async (t) => {
         assert.equal(response.status, 400);
       }
     );
+
+    // ============================================
+    // INSUFFICIENT BALANCE
+    // ============================================
 
     await t.test(
       "should prevent overdrafts and preserve the balance",
@@ -251,6 +302,7 @@ test("LedgerLine withdrawal API tests", async (t) => {
         const response = await request(app)
           .post("/api/transactions/withdraw")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             accountId: insufficientAccount._id.toString(),
             amountPaise: 3000
@@ -258,7 +310,10 @@ test("LedgerLine withdrawal API tests", async (t) => {
 
         assert.equal(response.status, 409);
 
-        const after = await Account.findById(insufficientAccount._id);
+        const after = await Account.findById(
+          insufficientAccount._id
+        );
+
         assert.equal(after.balancePaise, before);
 
         const transactionCount = await Transaction.countDocuments({
@@ -268,6 +323,10 @@ test("LedgerLine withdrawal API tests", async (t) => {
         assert.equal(transactionCount, 0);
       }
     );
+
+    // ============================================
+    // TRANSACTION ROLLBACK
+    // ============================================
 
     await t.test(
       "should roll back the balance if ledger creation fails",
@@ -285,6 +344,7 @@ test("LedgerLine withdrawal API tests", async (t) => {
           const response = await request(app)
             .post("/api/transactions/withdraw")
             .set("Authorization", `Bearer ${holderToken}`)
+            .set("Idempotency-Key", randomUUID())
             .send({
               accountId: rollbackAccount._id.toString(),
               amountPaise: 2500
@@ -296,7 +356,10 @@ test("LedgerLine withdrawal API tests", async (t) => {
             rollbackAccount._id
           );
 
-          assert.equal(afterAccount.balancePaise, beforeBalance);
+          assert.equal(
+            afterAccount.balancePaise,
+            beforeBalance
+          );
 
           const transactionCount = await Transaction.countDocuments({
             account: rollbackAccount._id
@@ -308,6 +371,10 @@ test("LedgerLine withdrawal API tests", async (t) => {
         }
       }
     );
+
+    // ============================================
+    // CONCURRENT WITHDRAWALS
+    // ============================================
 
     await t.test(
       "should prevent overdrafts during concurrent withdrawals",
@@ -325,6 +392,7 @@ test("LedgerLine withdrawal API tests", async (t) => {
             request(app)
               .post("/api/transactions/withdraw")
               .set("Authorization", `Bearer ${holderToken}`)
+              .set("Idempotency-Key", randomUUID())
               .send({
                 accountId: concurrentAccount._id.toString(),
                 amountPaise: withdrawalAmount,
@@ -362,13 +430,84 @@ test("LedgerLine withdrawal API tests", async (t) => {
 
         assert.equal(transactions.length, 6);
 
-        const expectedBalances = [1000, 2500, 4000, 5500, 7000, 8500];
+        const expectedBalances = [
+          1000,
+          2500,
+          4000,
+          5500,
+          7000,
+          8500
+        ];
 
         const actualBalances = transactions
           .map((transaction) => transaction.balanceAfterPaise)
           .sort((a, b) => a - b);
 
         assert.deepEqual(actualBalances, expectedBalances);
+      }
+    );
+
+    // ============================================
+    // IDEMPOTENCY
+    // ============================================
+
+    await t.test(
+      "should apply a repeated withdrawal idempotency key only once",
+      async () => {
+        const idempotentAccount = await makeAccount(holder);
+        const idempotencyKey = randomUUID();
+
+        const payload = {
+          accountId: idempotentAccount._id.toString(),
+          amountPaise: 2200,
+          description: "Idempotent withdrawal test"
+        };
+
+        const firstResponse = await request(app)
+          .post("/api/transactions/withdraw")
+          .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", idempotencyKey)
+          .send(payload);
+
+        const secondResponse = await request(app)
+          .post("/api/transactions/withdraw")
+          .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", idempotencyKey)
+          .send(payload);
+
+        assert.equal(firstResponse.status, 201);
+        assert.equal(secondResponse.status, 200);
+
+        const finalAccount = await Account.findById(
+          idempotentAccount._id
+        );
+
+        assert.equal(finalAccount.balancePaise, 7800);
+
+        const count = await Transaction.countDocuments({
+          account: idempotentAccount._id,
+          type: "WITHDRAWAL"
+        });
+
+        assert.equal(count, 1);
+
+        // Reusing the same key with a changed amount must be rejected.
+        const changedPayloadResponse = await request(app)
+          .post("/api/transactions/withdraw")
+          .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", idempotencyKey)
+          .send({
+            ...payload,
+            amountPaise: 3300
+          });
+
+        assert.equal(changedPayloadResponse.status, 409);
+
+        const unchangedAccount = await Account.findById(
+          idempotentAccount._id
+        );
+
+        assert.equal(unchangedAccount.balancePaise, 7800);
       }
     );
 

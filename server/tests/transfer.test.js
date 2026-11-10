@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const { test } = require("node:test");
@@ -80,6 +79,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // SUCCESSFUL TRANSFER
     // ============================================
+
     await t.test(
       "should complete a valid transfer and create two linked ledger entries",
       async () => {
@@ -90,6 +90,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
         const response = await request(app)
           .post("/api/transactions/transfer")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             sourceAccountId: sourceAccount._id.toString(),
             destinationAccountId: destinationAccount._id.toString(),
@@ -100,7 +101,10 @@ test("LedgerLine fund transfer API tests", async (t) => {
         assert.equal(response.status, 201);
         assert.equal(response.body.success, true);
 
-        const updatedSource = await Account.findById(sourceAccount._id);
+        const updatedSource = await Account.findById(
+          sourceAccount._id
+        );
+
         const updatedDestination = await Account.findById(
           destinationAccount._id
         );
@@ -154,6 +158,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // AUTHENTICATION
     // ============================================
+
     await t.test(
       "should reject a transfer without authentication",
       async () => {
@@ -172,6 +177,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // AMOUNT VALIDATION
     // ============================================
+
     await t.test(
       "should reject zero, negative, decimal and unsafe amounts",
       async () => {
@@ -184,6 +190,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
           const response = await request(app)
             .post("/api/transactions/transfer")
             .set("Authorization", `Bearer ${holderToken}`)
+            .set("Idempotency-Key", randomUUID())
             .send({
               sourceAccountId: sourceAccount._id.toString(),
               destinationAccountId: destinationAccount._id.toString(),
@@ -198,12 +205,14 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // ACCOUNT ID VALIDATION
     // ============================================
+
     await t.test(
       "should reject invalid source and destination account IDs",
       async () => {
         const invalidSource = await request(app)
           .post("/api/transactions/transfer")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             sourceAccountId: "invalid-id",
             destinationAccountId: destinationAccount._id.toString(),
@@ -215,6 +224,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
         const invalidDestination = await request(app)
           .post("/api/transactions/transfer")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             sourceAccountId: sourceAccount._id.toString(),
             destinationAccountId: "invalid-id",
@@ -228,12 +238,14 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // SAME ACCOUNT VALIDATION
     // ============================================
+
     await t.test(
       "should reject transfers between the same account",
       async () => {
         const response = await request(app)
           .post("/api/transactions/transfer")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             sourceAccountId: sourceAccount._id.toString(),
             destinationAccountId: sourceAccount._id.toString(),
@@ -247,12 +259,14 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // OWNERSHIP VALIDATION
     // ============================================
+
     await t.test(
       "should reject a transfer from another user's source account",
       async () => {
         const response = await request(app)
           .post("/api/transactions/transfer")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             sourceAccountId: destinationAccount._id.toString(),
             destinationAccountId: secondSourceAccount._id.toString(),
@@ -266,12 +280,14 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // ROLE VALIDATION
     // ============================================
+
     await t.test(
       "should reject transfers by an ADMIN",
       async () => {
         const response = await request(app)
           .post("/api/transactions/transfer")
           .set("Authorization", `Bearer ${adminToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             sourceAccountId: sourceAccount._id.toString(),
             destinationAccountId: destinationAccount._id.toString(),
@@ -285,6 +301,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // MISSING SOURCE ACCOUNT
     // ============================================
+
     await t.test(
       "should reject a missing source account",
       async () => {
@@ -293,6 +310,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
         const response = await request(app)
           .post("/api/transactions/transfer")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             sourceAccountId: missingId.toString(),
             destinationAccountId: destinationAccount._id.toString(),
@@ -306,6 +324,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // MISSING DESTINATION ACCOUNT
     // ============================================
+
     await t.test(
       "should reject a missing destination account",
       async () => {
@@ -314,6 +333,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
         const response = await request(app)
           .post("/api/transactions/transfer")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             sourceAccountId: secondSourceAccount._id.toString(),
             destinationAccountId: missingId.toString(),
@@ -327,12 +347,14 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // FROZEN SOURCE ACCOUNT
     // ============================================
+
     await t.test(
       "should reject a frozen source account",
       async () => {
         const response = await request(app)
           .post("/api/transactions/transfer")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             sourceAccountId: frozenSourceAccount._id.toString(),
             destinationAccountId: destinationAccount._id.toString(),
@@ -346,12 +368,14 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // FROZEN DESTINATION ACCOUNT
     // ============================================
+
     await t.test(
       "should reject a frozen destination account",
       async () => {
         const response = await request(app)
           .post("/api/transactions/transfer")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             sourceAccountId: secondSourceAccount._id.toString(),
             destinationAccountId: frozenDestinationAccount._id.toString(),
@@ -371,6 +395,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // INSUFFICIENT BALANCE
     // ============================================
+
     await t.test(
       "should prevent overdrafts and preserve both account balances",
       async () => {
@@ -385,6 +410,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
         const response = await request(app)
           .post("/api/transactions/transfer")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             sourceAccountId: lowBalanceSource._id.toString(),
             destinationAccountId: destinationAccount._id.toString(),
@@ -408,8 +434,6 @@ test("LedgerLine fund transfer API tests", async (t) => {
           destinationBefore.balancePaise
         );
 
-        // Only check the source account for new transfer entries.
-        // The destination already has an earlier successful transfer.
         const transactionCount = await Transaction.countDocuments({
           account: lowBalanceSource._id,
           type: "TRANSFER"
@@ -422,6 +446,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // DESTINATION BALANCE OVERFLOW
     // ============================================
+
     await t.test(
       "should reject a transfer that would overflow the destination balance",
       async () => {
@@ -436,6 +461,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
         const response = await request(app)
           .post("/api/transactions/transfer")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             sourceAccountId: overflowSource._id.toString(),
             destinationAccountId: overflowDestination._id.toString(),
@@ -464,12 +490,14 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // DESCRIPTION VALIDATION
     // ============================================
+
     await t.test(
       "should reject descriptions longer than 200 characters",
       async () => {
         const response = await request(app)
           .post("/api/transactions/transfer")
           .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", randomUUID())
           .send({
             sourceAccountId: secondSourceAccount._id.toString(),
             destinationAccountId: destinationAccount._id.toString(),
@@ -484,6 +512,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // TRANSACTION ROLLBACK
     // ============================================
+
     await t.test(
       "should roll back both balances if ledger creation fails",
       async () => {
@@ -503,6 +532,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
           const response = await request(app)
             .post("/api/transactions/transfer")
             .set("Authorization", `Bearer ${holderToken}`)
+            .set("Idempotency-Key", randomUUID())
             .send({
               sourceAccountId: rollbackSource._id.toString(),
               destinationAccountId: rollbackDestination._id.toString(),
@@ -529,7 +559,6 @@ test("LedgerLine fund transfer API tests", async (t) => {
           });
 
           assert.equal(transactionCount, 0);
-
         } finally {
           Transaction.create = originalCreate;
         }
@@ -539,6 +568,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
     // ============================================
     // CONCURRENT TRANSFERS
     // ============================================
+
     await t.test(
       "should preserve balances during concurrent transfers without overdrafts",
       async () => {
@@ -562,6 +592,7 @@ test("LedgerLine fund transfer API tests", async (t) => {
             request(app)
               .post("/api/transactions/transfer")
               .set("Authorization", `Bearer ${holderToken}`)
+              .set("Idempotency-Key", randomUUID())
               .send({
                 sourceAccountId: concurrentSource._id.toString(),
                 destinationAccountId: concurrentDestination._id.toString(),
@@ -631,6 +662,91 @@ test("LedgerLine fund transfer API tests", async (t) => {
           .sort();
 
         assert.deepEqual(outgoingTransferIds, incomingTransferIds);
+      }
+    );
+
+    // ============================================
+    // IDEMPOTENCY
+    // ============================================
+
+    await t.test(
+      "should apply a repeated transfer idempotency key only once",
+      async () => {
+        const idempotentSource = await makeAccount(holder);
+        const idempotentDestination = await makeAccount(anotherHolder);
+
+        const idempotencyKey = randomUUID();
+
+        const payload = {
+          sourceAccountId: idempotentSource._id.toString(),
+          destinationAccountId: idempotentDestination._id.toString(),
+          amountPaise: 2200,
+          description: "Idempotent transfer test"
+        };
+
+        const firstResponse = await request(app)
+          .post("/api/transactions/transfer")
+          .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", idempotencyKey)
+          .send(payload);
+
+        const secondResponse = await request(app)
+          .post("/api/transactions/transfer")
+          .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", idempotencyKey)
+          .send(payload);
+
+        assert.equal(firstResponse.status, 201);
+        assert.equal(secondResponse.status, 200);
+
+        const sourceAfter = await Account.findById(
+          idempotentSource._id
+        );
+
+        const destinationAfter = await Account.findById(
+          idempotentDestination._id
+        );
+
+        assert.equal(sourceAfter.balancePaise, 7800);
+        assert.equal(destinationAfter.balancePaise, 12200);
+
+        const outgoingCount = await Transaction.countDocuments({
+          account: idempotentSource._id,
+          type: "TRANSFER",
+          transferDirection: "OUTGOING"
+        });
+
+        const incomingCount = await Transaction.countDocuments({
+          account: idempotentDestination._id,
+          type: "TRANSFER",
+          transferDirection: "INCOMING"
+        });
+
+        assert.equal(outgoingCount, 1);
+        assert.equal(incomingCount, 1);
+
+        // Reusing the key with a different amount must fail.
+        const changedPayloadResponse = await request(app)
+          .post("/api/transactions/transfer")
+          .set("Authorization", `Bearer ${holderToken}`)
+          .set("Idempotency-Key", idempotencyKey)
+          .send({
+            ...payload,
+            amountPaise: 3300
+          });
+
+        assert.equal(changedPayloadResponse.status, 409);
+
+        const unchangedSource = await Account.findById(
+          idempotentSource._id
+        );
+
+        const unchangedDestination = await Account.findById(
+          idempotentDestination._id
+        );
+
+        assert.equal(unchangedSource.balancePaise, 7800);
+        assert.equal(unchangedDestination.balancePaise, 12200);
       }
     );
 
