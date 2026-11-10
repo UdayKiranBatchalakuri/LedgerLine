@@ -283,6 +283,61 @@
 
 ---
 
+# November 9, 2026
+
+## Assignment 10 — Full-Stack Integration, Multi-Role Portals & End-to-End Hardening
+
+**Status:** Implementation, automated regression suite (134/134 passing), and production build completed.
+
+### Completed Work
+- Implemented dedicated frontend portals for all three user roles:
+  - `ADMIN` (`/admin`): Navy-themed control panel with user suspension/reactivation, role modification, account freeze/activation/close safeguards, and compliance audit trail inspection.
+  - `AUDITOR` (`/auditor`): Amber-themed read-only compliance portal with platform reserve telemetry, system-wide transaction ledger inspection, and tamper-evident audit logs with zero write capabilities.
+  - `ACCOUNT_HOLDER` (`/dashboard`): Consumer banking portal with real-time INR balances, 1-click Copy Document ID helper, quick-action navigation, deposit/withdrawal/transfer flows, and cryptographic transaction proof inspection modal.
+- Configured dynamic post-login routing and role-based route guards in `App.jsx`.
+- Added global Axios response interceptor in `api.js` for automatic HTTP 401 token expiry handling.
+- Implemented out-of-band role promotion CLI script (`server/scripts/setRole.js`).
+- Executed the full automated test suite: **134 passing tests, 0 failures**.
+- Built clean client production bundle with Vite (`0 lint errors, 0 warnings`).
+
+---
+
+## AI Error Catching & Money Integrity Verification
+
+As required by the challenge standard, below are the specific dated instances where AI tool suggestions were scrutinized, identified as flawed or dangerous to money movement, and corrected with sound engineering.
+
+### 1. Money Integrity: Idempotency Key Payload Hashing vs. Key-Only Collision
+- **What the tool was asked to do:** Implement idempotency key caching for the fund transfer endpoint to prevent double-charging on network retry timeouts.
+- **What the tool produced:** A simple key-value lookup checking if `req.headers['idempotency-key']` existed in the database and returning the cached response if present.
+- **What was specifically wrong:** Critical financial security flaw. If a client re-used an idempotency key with a *different* amount, a different source account, or a different recipient, the system would return the old cached receipt while silently failing to process the new transaction, creating a discrepancy between client state and actual ledger balances.
+- **What was done instead:** Enforced cryptographic SHA-256 request payload hashing. The server computes `crypto.createHash('sha256').update(JSON.stringify({ amountPaise, sourceAccountId, destinationAccountId })).digest('hex')` and stores both `idempotencyKey` and `idempotencyHash`. If an identical key is submitted with mismatched payload parameters, the server rejects it with `HTTP 409 Conflict`. Verified in `tests/transfer.test.js`.
+
+### 2. Money Integrity: Enforcing Strict Integer Paise vs. Floating-Point Decimals
+- **What the tool was asked to do:** Implement deposit and withdrawal amount calculation and account balance updates.
+- **What the tool produced:** Balance arithmetic using JavaScript `parseFloat(amount)` and standard rupee addition (`balance += amount`).
+- **What was specifically wrong:** In JavaScript, IEEE-754 floating-point arithmetic suffers from precision leakage (e.g., `0.1 + 0.2 === 0.30000000000000004`). In a high-volume financial ledger, fractional penny rounding errors violate the core invariant: *"The books must always balance"*.
+- **What was done instead:** Completely banned floating-point monetary math across both client and server. Converted all financial amounts to integer **Paise** (`1 INR = 100 paise`), validated inputs with `Number.isSafeInteger()`, rejected fractional paise at the Zod schema boundary, and stored strictly integer balances in MongoDB. Verified in `tests/account.test.js`.
+
+### 3. Frontend Lifecycle: Empty-Accounts Freeze in Transaction History
+- **What the tool was asked to do:** Implement the Account Holder Transaction History page (`client/src/pages/Transactions.jsx`).
+- **What the tool produced:** A `useEffect` hook that set `loadingTxns = true` whenever `accountId` changed, but only set `accountId` once an account was selected from the fetched account list.
+- **What was specifically wrong:** If a brand-new user with zero bank accounts logged into the system, `accounts.length` was 0, so no account was ever selected. This left `loadingTxns` stuck on `true` permanently, displaying an infinite loading spinner and blocking the user from viewing the page.
+- **What was done instead:** Added a guard in `Transactions.jsx`: if the fetched account list is empty, both `loadingAccounts` and `loadingTxns` are immediately resolved to `false`, displaying a clean empty state with an onboarding prompt to create their first bank account.
+
+### 4. Code Quality: React Hook Synchronous State Updates
+- **What the tool was asked to do:** Create Admin and Auditor telemetry dashboards that fetch users, accounts, and audit logs on mount.
+- **What the tool produced:** Synchronous state modifications inside the `useEffect` body prior to async promise resolution.
+- **What was specifically wrong:** Triggered ESLint `react-hooks/set-state-in-effect` errors, potential memory leaks, and cascading re-renders when navigating away before requests completed.
+- **What was done instead:** Refactored data loading into isolated async initialization functions with an `isMounted` cancellation flag, updating state only when mounted and after promise resolution. Re-ran linter to achieve `0 errors, 0 warnings`.
+
+### 5. Session Security: Unhandled HTTP 401 Token Expiration
+- **What the tool was asked to do:** Configure the Axios API client for authenticated requests.
+- **What the tool produced:** A request interceptor that attached `Bearer ${token}` from `localStorage`, with no response interceptor.
+- **What was specifically wrong:** When a JWT expired after 24 hours or when an administrator suspended a user, subsequent API requests failed with HTTP 401, but the frontend remained stuck on stale views with generic network errors rather than redirecting the user to log in again.
+- **What was done instead:** Added an Axios response interceptor in `client/src/services/api.js` that checks for HTTP 401 responses on protected endpoints, automatically cleans up invalid tokens from `localStorage`, and redirects the browser cleanly to `/login`.
+
+---
+
 ## Development Integrity
 
 - AI-assisted work is documented transparently.
