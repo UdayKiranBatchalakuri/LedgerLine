@@ -364,6 +364,30 @@ As required by the challenge standard, below are the specific dated instances wh
 
 ---
 
+# November 11, 2026
+
+## Assignment 12 — Production Cloud Deployment & Cloud Database Synchronization
+
+### Completed Work
+- **Backend Production Deployment (Render):** Connected GitHub repository to Render Web Service. Configured Node.js 24 environment with build command `npm install` and start command `npm start`. Configured production environment variables (`NODE_ENV=production`, `PORT=10000`, `MONGODB_URI`, `JWT_SECRET`, `CLIENT_URL`).
+  - Render API Service: `https://ledgerline-api-2j8d.onrender.com`
+  - Health check endpoint returning HTTP 200: `https://ledgerline-api-2j8d.onrender.com/api/health`
+- **Frontend Production Deployment (Vercel):** Connected repository to Vercel targeting the `client/` directory with Vite build preset. Configured production environment variable `VITE_API_URL=https://ledgerline-api-2j8d.onrender.com/api`.
+- **SPA Routing Configuration:** Created and deployed `client/vercel.json` with client-side rewrite rules (`[{"source": "/(.*)", "destination": "/index.html"}]`) preventing 404 errors when refreshing `/dashboard`, `/accounts`, `/statements`, or `/admin` routes.
+- **Permanent Cloud Database Access:** Verified MongoDB Atlas IP Access List rule `0.0.0.0/0` is permanently whitelisted (no expiration), ensuring high availability across dynamic Render instance IPs.
+- **Live Authentication & Role Verification:** Successfully verified live authentication and JWT issuance across `ADMIN`, `AUDITOR`, and `ACCOUNT_HOLDER` roles on the live Render API.
+
+### AI Error Catching & Cloud Deployment Issues
+
+#### 7. Multi-Database Namespace Deserialization on Cloud Atlas vs. Seed State
+- **What the tool was asked to do:** Deploy the backend to Render and test user sign-in from the live frontend.
+- **What the tool produced:** Connected the backend with `MONGODB_URI=mongodb+srv://.../ledgerline`. When users tried logging in on the live site, it failed with `"Invalid email or password"`.
+- **What was specifically wrong:** During initial local development, the connection string did not specify a database name, causing Mongoose to populate the default `test` database with the 8 seed users, 11 bank accounts, 16 transactions, and 95 audit logs. On Render, the connection explicitly pointed to `/ledgerline`, which was a completely clean, empty database.
+- **What was done instead:** Executed an automated database synchronization script using Mongoose to clone all collections (`users`, `accounts`, `transactions`, `auditlogs`) from `test` to `ledgerline` with indexes and bcrypt password hashes preserved intact. Verified immediate HTTP 200 responses on `POST /api/auth/login` for all evaluator test accounts.
+- **Verification:** Live login confirmed for `holder@ledgerline.com` and `admin@ledgerline.com`.
+
+---
+
 ## Development Integrity
 
 - AI-assisted work is documented transparently.

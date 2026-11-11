@@ -10,7 +10,7 @@ The project is being developed as part of the **Snovasys Fresher Hiring Challeng
 
 ## Table of Contents
 
-0. [Evaluation & Demo Credentials](#0-evaluation--demo-credentials)
+0. [Live Deployment & Evaluation Credentials](#0-live-deployment--evaluation-credentials)
 1. [Project Overview](#1-project-overview)
 2. [Project Objectives](#2-project-objectives)
 3. [Technology Stack](#3-technology-stack)
@@ -33,15 +33,33 @@ The project is being developed as part of the **Snovasys Fresher Hiring Challeng
 
 ---
 
-## 0. Evaluation & Demo Credentials
+## 0. Live Deployment & Evaluation Credentials
 
-For evaluators and judges reviewing this submission, the platform is pre-configured with distinct role credentials and a role-promotion script.
+### 🌐 Live Production Deployments
+
+The application is deployed live in production across cloud infrastructure:
+
+| Component | Platform | Live URL / Endpoint | Status |
+|---|---|---|---|
+| **Web Frontend (Client)** | **Vercel** | [https://ledgerline.vercel.app](https://ledgerline.vercel.app) *(or project preview domain)* | 🟢 Active (SPA Routing Enabled) |
+| **Backend REST API** | **Render** | [https://ledgerline-api-2j8d.onrender.com/api](https://ledgerline-api-2j8d.onrender.com/api) | 🟢 Active (Node.js 24) |
+| **API Health Check** | **Render** | [https://ledgerline-api-2j8d.onrender.com/api/health](https://ledgerline-api-2j8d.onrender.com/api/health) | 🟢 Returns HTTP 200 OK |
+| **Database Cluster** | **MongoDB Atlas** | `mongodb+srv://.../ledgerline` | 🟢 Global Access (`0.0.0.0/0` Whitelisted) |
+| **Source Repository** | **GitHub** | [https://github.com/UdayKiranBatchalakuri/LedgerLine](https://github.com/UdayKiranBatchalakuri/LedgerLine) | 🟢 Public Repository |
+
+> **Note on Cold Starts:** Render free tier instances spin down after 15 minutes of inactivity. If the first API request takes ~30 seconds, please allow a moment for the instance to warm up.
+
+---
+
+### 🔑 Pre-Seeded Evaluation Credentials
+
+For evaluators and judges reviewing this submission, the live production database is pre-configured with distinct role credentials across all three RBAC tiers:
 
 | Role | Email | Password | Access Portal | Allowed Actions |
 |---|---|---|---|---|
-| **ADMIN** | `kiranuday719@gmail.com` *(or `admin@ledgerline.com`)* | `Admin@123` *(or registered pwd)* | `/admin` | Full management: Freeze/reactivate accounts, close empty accounts, suspend/reactivate users, change user roles, inspect audit trail diffs. |
-| **AUDITOR** | `auditor@ledgerline.com` | `Auditor@123` | `/auditor` | **Strictly read-only**: View platform reserves, inspect all accounts, forensic transaction proof modal (SHA-256 hash & balance snapshots), view audit trail. Zero write capability. |
-| **ACCOUNT_HOLDER** | `holder@ledgerline.com` *(or newly registered)* | `Holder@123` | `/dashboard` | Self-service banking: Create Savings/Current accounts, 1-click copy account ID, deposit, withdraw (overdraft blocked), atomic transfers, view personal ledger & proofs. |
+| **ADMIN** | `admin@ledgerline.com` *(or `kiranuday719@gmail.com`)* | `Admin@123` | `/dashboard` → `/admin/*` | Full management: Freeze/reactivate accounts, close empty accounts, suspend/reactivate users, change user roles, inspect audit trail diffs. |
+| **AUDITOR** | `auditor@ledgerline.com` | `Auditor@123` | `/dashboard` → `/auditor` | **Strictly read-only**: View platform reserves, inspect all accounts, forensic transaction proof modal (SHA-256 hash & balance snapshots), view audit trail. Zero write capability. |
+| **ACCOUNT_HOLDER** | `holder@ledgerline.com` | `Holder@123` | `/dashboard` | Self-service banking: Create Savings/Current accounts, 1-click copy account ID, deposit, withdraw (overdraft blocked), atomic transfers, view personal ledger & proofs. |
 
 ### Switching Any Account's Role
 To switch any account's role instantly without database tampering, run from `server/`:
@@ -808,7 +826,7 @@ Potential improvements for future development include:
 - Real-time event streaming and webhook notifications (Kafka / RabbitMQ).
 - Native iOS and Android mobile applications using React Native.
 - Comprehensive CSV / PDF downloadable account statements.
-- Production deployment with automated CI/CD pipelines.
+- Granular daily withdrawal velocity limits per account tier.
 
 ---
 
