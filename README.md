@@ -41,7 +41,7 @@ The application is deployed live in production across cloud infrastructure:
 
 | Component | Platform | Live URL / Endpoint | Status |
 |---|---|---|---|
-| **Web Frontend (Client)** | **Vercel** | [https://ledgerline.vercel.app](https://ledgerline.vercel.app) *(or project preview domain)* | 🟢 Active (SPA Routing Enabled) |
+| **Web Frontend (Client)** | **Vercel** | [https://ledger-line-dusky.vercel.app](https://ledger-line-dusky.vercel.app) | 🟢 Active (SPA Routing Enabled) |
 | **Backend REST API** | **Render** | [https://ledgerline-api-2j8d.onrender.com/api](https://ledgerline-api-2j8d.onrender.com/api) | 🟢 Active (Node.js 24) |
 | **API Health Check** | **Render** | [https://ledgerline-api-2j8d.onrender.com/api/health](https://ledgerline-api-2j8d.onrender.com/api/health) | 🟢 Returns HTTP 200 OK |
 | **Database Cluster** | **MongoDB Atlas** | `mongodb+srv://.../ledgerline` | 🟢 Global Access (`0.0.0.0/0` Whitelisted) |

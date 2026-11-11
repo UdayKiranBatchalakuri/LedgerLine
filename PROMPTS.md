@@ -372,7 +372,7 @@ As required by the challenge standard, below are the specific dated instances wh
 - **Backend Production Deployment (Render):** Connected GitHub repository to Render Web Service. Configured Node.js 24 environment with build command `npm install` and start command `npm start`. Configured production environment variables (`NODE_ENV=production`, `PORT=10000`, `MONGODB_URI`, `JWT_SECRET`, `CLIENT_URL`).
   - Render API Service: `https://ledgerline-api-2j8d.onrender.com`
   - Health check endpoint returning HTTP 200: `https://ledgerline-api-2j8d.onrender.com/api/health`
-- **Frontend Production Deployment (Vercel):** Connected repository to Vercel targeting the `client/` directory with Vite build preset. Configured production environment variable `VITE_API_URL=https://ledgerline-api-2j8d.onrender.com/api`.
+- **Frontend Production Deployment (Vercel):** Connected repository to Vercel targeting the `client/` directory with Vite build preset (`https://ledger-line-dusky.vercel.app`). Configured production environment variable `VITE_API_URL=https://ledgerline-api-2j8d.onrender.com/api`.
 - **SPA Routing Configuration:** Created and deployed `client/vercel.json` with client-side rewrite rules (`[{"source": "/(.*)", "destination": "/index.html"}]`) preventing 404 errors when refreshing `/dashboard`, `/accounts`, `/statements`, or `/admin` routes.
 - **Permanent Cloud Database Access:** Verified MongoDB Atlas IP Access List rule `0.0.0.0/0` is permanently whitelisted (no expiration), ensuring high availability across dynamic Render instance IPs.
 - **Live Authentication & Role Verification:** Successfully verified live authentication and JWT issuance across `ADMIN`, `AUDITOR`, and `ACCOUNT_HOLDER` roles on the live Render API.
